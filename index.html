@@ -7,9 +7,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;1,9..144,300&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
-  --cream: #F7F3EC; --sand: #E5DDD0; --terra: #B85C38; --terra-light: #D4724F;
-  --charcoal: #242320; --muted: #8C8479; --surface: #FFFFFF;
-  --danger: #B83232; --warn: #C47C1A; --good: #3D7A4A; --light: #FAF8F4;
+  --cream:#F7F3EC;--sand:#E5DDD0;--terra:#B85C38;--terra-light:#D4724F;
+  --charcoal:#242320;--muted:#8C8479;--surface:#FFFFFF;
+  --danger:#B83232;--warn:#C47C1A;--good:#3D7A4A;--light:#FAF8F4;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--charcoal);min-height:100vh}
@@ -22,17 +22,16 @@ nav{background:var(--charcoal);padding:0 40px;display:flex;align-items:center;ju
 .config-btn:hover{border-color:var(--terra-light);color:var(--terra-light)}
 main{max-width:1080px;margin:0 auto;padding:36px 24px}
 
-/* CONFIG */
-#config-banner{background:var(--charcoal);border-radius:12px;padding:20px 24px;margin-bottom:28px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+#config-banner{background:var(--charcoal);border-radius:12px;padding:20px 24px;margin-bottom:28px;display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap}
 #config-banner.hidden{display:none}
-.config-label{font-size:13px;color:var(--sand);white-space:nowrap;min-width:130px}
-.config-input{flex:1;min-width:200px;background:#333;border:1px solid #555;color:var(--cream);padding:8px 12px;border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px}
+.config-label{font-size:13px;color:var(--sand);white-space:nowrap;padding-top:10px;min-width:130px}
+.config-col{display:flex;flex-direction:column;gap:8px;flex:1;min-width:220px}
+.config-input{width:100%;background:#333;border:1px solid #555;color:var(--cream);padding:8px 12px;border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px}
 .config-input:focus{outline:none;border-color:var(--terra-light)}
-.config-save{background:var(--terra);color:white;border:none;padding:9px 20px;border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer}
+.config-note{font-size:11px;color:var(--muted)}
+.config-save{background:var(--terra);color:white;border:none;padding:9px 20px;border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;align-self:flex-start}
 .config-save:hover{background:var(--terra-light)}
-.config-note{font-size:11px;color:var(--muted);width:100%;padding-top:4px}
 
-/* UPLOAD */
 #upload-zone{border:2px dashed var(--sand);border-radius:16px;background:var(--surface);padding:52px 32px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:28px}
 #upload-zone:hover,#upload-zone.drag{border-color:var(--terra);background:var(--light)}
 #upload-zone.hidden{display:none}
@@ -43,7 +42,6 @@ main{max-width:1080px;margin:0 auto;padding:36px 24px}
 .upload-cta:hover{background:var(--terra-light)}
 #file-input{display:none}
 
-/* PROCESSING */
 #processing{background:var(--charcoal);border-radius:16px;padding:40px;text-align:center;margin-bottom:28px;display:none}
 #processing.active{display:block}
 .spin{width:44px;height:44px;border:3px solid rgba(255,255,255,0.1);border-top-color:var(--terra-light);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 20px}
@@ -51,11 +49,9 @@ main{max-width:1080px;margin:0 auto;padding:36px 24px}
 .proc-title{font-family:'Fraunces',serif;font-size:20px;color:var(--cream);font-weight:300;margin-bottom:8px}
 .proc-step{font-size:13px;color:var(--muted)}
 
-/* ERROR */
 #error-box{background:#fdf0f0;border:1px solid #e8b4b4;border-radius:10px;padding:14px 18px;color:var(--danger);font-size:13px;margin-bottom:20px;display:none}
 #error-box.active{display:block}
 
-/* DASHBOARD */
 #dashboard{display:none}
 #dashboard.active{display:block}
 .dash-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;gap:16px;flex-wrap:wrap}
@@ -63,12 +59,10 @@ main{max-width:1080px;margin:0 auto;padding:36px 24px}
 .dash-title em{color:var(--terra);font-style:italic}
 .dash-actions{display:flex;gap:10px;flex-shrink:0}
 .action-btn{padding:9px 18px;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;border:none}
-.btn-primary{background:var(--terra);color:white}
-.btn-primary:hover{background:var(--terra-light)}
-.btn-secondary{background:var(--surface);color:var(--charcoal);border:1px solid var(--sand)!important;border:none}
-.btn-secondary:hover{border-color:var(--terra)!important}
+.btn-primary{background:var(--terra);color:white}.btn-primary:hover{background:var(--terra-light)}
+.btn-outline{background:var(--surface);color:var(--charcoal);border:1px solid var(--sand)!important}
+.btn-outline:hover{border-color:var(--terra)!important}
 
-/* SYNC BAR */
 .sync-bar{display:flex;align-items:center;gap:10px;background:var(--charcoal);border-radius:10px;padding:12px 20px;margin-bottom:20px;font-size:13px;color:var(--sand)}
 .sync-dot{width:8px;height:8px;border-radius:50%;background:var(--good);flex-shrink:0}
 .sync-dot.warn{background:var(--warn);animation:pulse 1s infinite}
@@ -77,12 +71,10 @@ main{max-width:1080px;margin:0 auto;padding:36px 24px}
 .sync-bar a{color:var(--terra-light);text-decoration:none;margin-left:auto;font-size:12px}
 .sync-bar a:hover{text-decoration:underline}
 
-/* PERIOD TABS */
 .period-tabs{display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap}
 .period-tab{padding:6px 16px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--sand);background:var(--surface);transition:all .15s;color:var(--muted)}
 .period-tab.active{background:var(--charcoal);color:var(--cream);border-color:var(--charcoal)}
 
-/* KPIs */
 .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
 .kpi{background:var(--surface);border-radius:12px;padding:18px 20px;border-top:3px solid var(--sand)}
 .kpi.danger{border-top-color:var(--danger)}.kpi.warn{border-top-color:var(--warn)}.kpi.good{border-top-color:var(--good)}.kpi.neutral{border-top-color:var(--muted)}
@@ -91,21 +83,18 @@ main{max-width:1080px;margin:0 auto;padding:36px 24px}
 .kpi-delta{font-size:11px;color:var(--muted);margin-top:6px}
 .kpi-delta.up{color:var(--danger)}.kpi-delta.dn{color:var(--good)}
 
-/* GRID */
 .grid-2{display:grid;grid-template-columns:1.1fr .9fr;gap:16px;margin-bottom:16px}
 .grid-2-eq{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
 .card{background:var(--surface);border-radius:12px;padding:22px 24px}
 .card-title{font-family:'Fraunces',serif;font-size:16px;font-weight:500;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--sand);display:flex;align-items:center;justify-content:space-between}
-.card-title-sub{font-family:'DM Sans',sans-serif;font-size:11px;color:var(--muted);font-weight:400}
+.card-sub{font-family:'DM Sans',sans-serif;font-size:11px;color:var(--muted);font-weight:400}
 
-/* CATEGORY BARS */
 .cat-item{display:flex;align-items:center;gap:10px;margin-bottom:11px}
 .cat-name{width:150px;font-size:12px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bar-wrap{flex:1;height:6px;background:var(--sand);border-radius:3px;overflow:hidden}
 .bar-fill{height:100%;border-radius:3px;transition:width 1s cubic-bezier(.16,1,.3,1)}
 .cat-amt{width:64px;text-align:right;font-size:12px;font-weight:600;flex-shrink:0}
 
-/* DEBT TABLE */
 .debt-tbl{width:100%;border-collapse:collapse;font-size:12px}
 .debt-tbl th{text-align:left;padding:7px 10px;background:var(--charcoal);color:var(--cream);font-size:10px;font-weight:500;letter-spacing:1px;text-transform:uppercase}
 .debt-tbl td{padding:10px 10px;border-bottom:1px solid var(--sand)}
@@ -114,7 +103,6 @@ main{max-width:1080px;margin:0 auto;padding:36px 24px}
 .badge{padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700}
 .badge-up{background:#fde8e8;color:var(--danger)}.badge-dn{background:#e8f5ec;color:var(--good)}.badge-new{background:var(--sand);color:var(--muted)}
 
-/* LEAKS */
 .leak{display:flex;align-items:flex-start;gap:12px;padding:11px 0;border-bottom:1px solid var(--sand)}
 .leak:last-child{border-bottom:none}
 .leak-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px}
@@ -124,7 +112,6 @@ main{max-width:1080px;margin:0 auto;padding:36px 24px}
 .leak-note{font-size:11px;color:var(--muted)}
 .leak-amt{font-family:'Fraunces',serif;font-size:20px;font-weight:300;color:var(--danger);flex-shrink:0}
 
-/* TX TABLE */
 .tx-wrap{background:var(--surface);border-radius:12px;padding:22px 24px;margin-bottom:16px;overflow-x:auto}
 .tx-tbl{width:100%;border-collapse:collapse;font-size:12px}
 .tx-tbl th{text-align:left;padding:7px 12px;background:var(--charcoal);color:var(--cream);font-size:10px;font-weight:500;letter-spacing:1px;text-transform:uppercase}
@@ -144,21 +131,21 @@ main{max-width:1080px;margin:0 auto;padding:36px 24px}
 <nav>
   <div class="logo"><em>nest</em> finance</div>
   <div class="nav-right">
-    <span class="nav-hint" id="sheet-hint">No Sheet connected</span>
+    <span class="nav-hint" id="sheet-hint">No Script connected</span>
     <button class="config-btn" onclick="toggleConfig()">⚙ Configure</button>
   </div>
 </nav>
 <main>
 
-  <!-- CONFIG -->
   <div id="config-banner">
     <span class="config-label">Apps Script URL</span>
-    <input class="config-input" id="script-url-input" type="text" placeholder="https://script.google.com/macros/s/…/exec" />
+    <div class="config-col">
+      <input class="config-input" id="script-url-input" type="text" placeholder="https://script.google.com/macros/s/…/exec" />
+      <span class="config-note">Deploy your Apps Script as a Web App and paste the URL here. See nest_apps_script.js for setup instructions.</span>
+    </div>
     <button class="config-save" onclick="saveConfig()">Save</button>
-    <p class="config-note">Paste your deployed Apps Script Web App URL here. See the setup guide in the companion file.</p>
   </div>
 
-  <!-- UPLOAD -->
   <div id="upload-zone"
     onclick="document.getElementById('file-input').click()"
     ondragover="event.preventDefault();this.classList.add('drag')"
@@ -166,32 +153,29 @@ main{max-width:1080px;margin:0 auto;padding:36px 24px}
     ondrop="handleDrop(event)">
     <span class="upload-icon">🏠</span>
     <div class="upload-title">Drop your bank statement here</div>
-    <div class="upload-sub">ANZ PDF statements — AI extracts &amp; categorises every transaction</div>
+    <div class="upload-sub">ANZ PDF statements — your Apps Script does all the reading &amp; categorising</div>
     <button class="upload-cta" onclick="event.stopPropagation();document.getElementById('file-input').click()">Choose PDF</button>
     <input type="file" id="file-input" accept=".pdf" onchange="handleFile(this.files[0])">
   </div>
 
-  <!-- PROCESSING -->
   <div id="processing">
     <div class="spin"></div>
     <div class="proc-title">Reading your statement…</div>
-    <div class="proc-step" id="proc-step">Sending to AI</div>
+    <div class="proc-step" id="proc-step">Sending to Apps Script</div>
   </div>
 
-  <!-- ERROR -->
   <div id="error-box"></div>
 
-  <!-- DASHBOARD -->
   <div id="dashboard">
     <div class="dash-header">
       <div class="dash-title">Your <em>spending</em><br>at a glance</div>
       <div class="dash-actions">
-        <button class="action-btn btn-secondary" onclick="showUpload()">+ New Statement</button>
+        <button class="action-btn btn-outline" onclick="showUpload()">+ New Statement</button>
         <button class="action-btn btn-primary" id="sheet-btn" style="display:none" onclick="openSheet()">Open Google Sheet ↗</button>
       </div>
     </div>
 
-    <div class="sync-bar" id="sync-bar">
+    <div class="sync-bar">
       <div class="sync-dot" id="sync-dot"></div>
       <span id="sync-text">—</span>
       <a href="#" id="sync-link" target="_blank"></a>
@@ -208,7 +192,7 @@ main{max-width:1080px;margin:0 auto;padding:36px 24px}
 
     <div class="grid-2">
       <div class="card">
-        <div class="card-title">Spending by Category <span class="card-title-sub" id="cat-period"></span></div>
+        <div class="card-title">Spending by Category <span class="card-sub" id="cat-period"></span></div>
         <div id="cat-bars"></div>
       </div>
       <div class="card">
@@ -231,7 +215,8 @@ main{max-width:1080px;margin:0 auto;padding:36px 24px}
 
     <div class="tx-wrap">
       <div style="font-family:'Fraunces',serif;font-size:16px;font-weight:500;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--sand);display:flex;align-items:center;justify-content:space-between">
-        All Transactions <span style="font-family:'DM Sans',sans-serif;font-size:11px;color:var(--muted);font-weight:400" id="tx-count"></span>
+        All Transactions
+        <span style="font-family:'DM Sans',sans-serif;font-size:11px;color:var(--muted);font-weight:400" id="tx-count"></span>
       </div>
       <table class="tx-tbl">
         <thead><tr><th>Date</th><th>Merchant</th><th>Category</th><th style="text-align:right">Amount</th></tr></thead>
@@ -242,9 +227,9 @@ main{max-width:1080px;margin:0 auto;padding:36px 24px}
 
 </main>
 <script>
-const CAT_COLORS=['#B85C38','#C47C1A','#3D7A4A','#2A6B9E','#7A3D7A','#3D6B6B','#8C5A2A','#4A6741','#7A2A3D','#2A4A7A','#6B6B3D','#3D4A6B'];
+const COLORS=['#B85C38','#C47C1A','#3D7A4A','#2A6B9E','#7A3D7A','#3D6B6B','#8C5A2A','#4A6741','#7A2A3D','#2A4A7A','#6B6B3D','#3D4A6B'];
 let statements=JSON.parse(localStorage.getItem('nest_v2')||'[]');
-let activeIdx=statements.length-1;
+let activeIdx=Math.max(0,statements.length-1);
 let scriptURL=localStorage.getItem('nest_script_url')||'';
 let sheetURL=localStorage.getItem('nest_sheet_url')||'';
 
@@ -252,17 +237,17 @@ window.onload=()=>{
   if(scriptURL){
     document.getElementById('script-url-input').value=scriptURL;
     document.getElementById('config-banner').classList.add('hidden');
-    document.getElementById('sheet-hint').textContent='Sheet connected ✓';
+    document.getElementById('sheet-hint').textContent='Script connected ✓';
   }
-  if(statements.length>0) showDashboard();
+  if(statements.length) showDashboard();
 };
 
 function toggleConfig(){document.getElementById('config-banner').classList.toggle('hidden')}
 function saveConfig(){
   const u=document.getElementById('script-url-input').value.trim();
-  if(!u||!u.startsWith('https://')){alert('Please enter a valid URL.');return}
-  scriptURL=u; localStorage.setItem('nest_script_url',u);
-  document.getElementById('sheet-hint').textContent='Sheet connected ✓';
+  if(!u.startsWith('https://')){alert('Please enter a valid URL.');return}
+  scriptURL=u;localStorage.setItem('nest_script_url',u);
+  document.getElementById('sheet-hint').textContent='Script connected ✓';
   document.getElementById('config-banner').classList.add('hidden');
 }
 function openSheet(){if(sheetURL)window.open(sheetURL,'_blank')}
@@ -280,23 +265,23 @@ function handleDrop(e){
 }
 
 async function handleFile(file){
-  if(!file) return;
-  if(!scriptURL){showError('Configure your Apps Script URL first (click ⚙ Configure).');return}
-  setProc(true,'Sending PDF to AI for extraction…'); hideError();
+  if(!file)return;
+  if(!scriptURL){showError('Please add your Apps Script URL first — click ⚙ Configure.');return}
+  setProc(true,'Sending PDF to your Apps Script…');hideError();
   try{
     const b64=await toBase64(file);
-    setStep('AI is reading your statement…');
-    const parsed=await callClaude(b64);
-    setStep('Saving to Google Sheet…');
-    const result=await sendToSheet(parsed);
-    if(result&&result.sheetUrl){sheetURL=result.sheetUrl;localStorage.setItem('nest_sheet_url',sheetURL)}
-    // Deduplicate by period
+    setStep('Apps Script is reading &amp; categorising transactions…');
+    // Send PDF to Apps Script — it handles Anthropic API call server-side
+    const result=await sendToScript({pdf_base64:b64});
+    if(result.status==='error') throw new Error(result.message);
+    const parsed=result.data;
+    if(result.sheetUrl){sheetURL=result.sheetUrl;localStorage.setItem('nest_sheet_url',sheetURL)}
     const exists=statements.findIndex(s=>s.period===parsed.period);
     if(exists>=0) statements[exists]=parsed; else statements.push(parsed);
     statements.sort((a,b)=>new Date(a.period_start)-new Date(b.period_start));
     activeIdx=statements.findIndex(s=>s.period===parsed.period);
     localStorage.setItem('nest_v2',JSON.stringify(statements));
-    setProc(false); showDashboard();
+    setProc(false);showDashboard();
   }catch(err){setProc(false);showError('Error: '+err.message)}
 }
 
@@ -309,53 +294,15 @@ function toBase64(file){
   });
 }
 
-async function callClaude(b64){
-  const prompt=`Analyse this ANZ bank statement PDF and return ONLY a valid JSON object — no markdown, no preamble.
-
-Schema:
-{
-  "period": "Jan-Feb 2026",
-  "period_start": "2026-01-20",
-  "period_end": "2026-02-19",
-  "opening_balance": 1483.92,
-  "closing_balance": 4361.02,
-  "total_debits": 2908.84,
-  "total_payments": 83.00,
-  "interest": 51.26,
-  "transactions": [
-    {"date":"2026-01-18","merchant":"PlayStation Network","category":"Entertainment","amount":13.40}
-  ]
-}
-
-Category options: Groceries, Dining & Takeaway, Fuel & Transport, Automotive, Phone & Internet, Utilities, Subscriptions, Health & Pharmacy, Shopping, Home & Garden, Travel & Accommodation, Entertainment, Hobbies & Recreation, Personal Care, Education, Other
-
-Rules:
-- Exclude payment credits and interest rows from transactions array
-- Merge overseas transaction fees into parent transaction amount
-- Use transaction date not processed date
-- Return ONLY the JSON object`;
-
-  const r=await fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      model:'claude-sonnet-4-20250514',max_tokens:4000,
-      messages:[{role:'user',content:[
-        {type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},
-        {type:'text',text:prompt}
-      ]}]
-    })
+async function sendToScript(body){
+  const r=await fetch(scriptURL,{
+    method:'POST',
+    // Note: no Content-Type header — Apps Script CORS requires simple requests
+    body:JSON.stringify(body),
+    redirect:'follow'
   });
-  if(!r.ok) throw new Error(`Claude API error ${r.status}`);
-  const d=await r.json();
-  const txt=d.content.find(b=>b.type==='text')?.text||'';
-  try{return JSON.parse(txt.replace(/```json|```/g,'').trim())}
-  catch{throw new Error('Could not parse AI response — try again')}
-}
-
-async function sendToSheet(parsed){
-  const r=await fetch(scriptURL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(parsed),redirect:'follow'});
-  if(!r.ok) throw new Error(`Sheet sync failed: ${r.status}`);
-  try{return await r.json()}catch{return{}}
+  if(!r.ok) throw new Error(`Script returned ${r.status} — check it is deployed correctly`);
+  return await r.json();
 }
 
 function showDashboard(){
@@ -365,26 +312,22 @@ function showDashboard(){
 }
 
 function render(){
-  if(!statements.length) return;
+  if(!statements.length)return;
   const s=statements[activeIdx];
-  // Tabs
   document.getElementById('period-tabs').innerHTML=statements.map((st,i)=>
     `<div class="period-tab ${i===activeIdx?'active':''}" onclick="switchPeriod(${i})">${st.period}</div>`
   ).join('');
-  // KPIs
   document.getElementById('k-bal').textContent=fmt(s.closing_balance);
   document.getElementById('k-spent').textContent=fmt(s.total_debits);
   document.getElementById('k-paid').textContent=fmt(s.total_payments);
   document.getElementById('k-int').textContent=fmt(s.interest);
+  ['k-bal-d','k-spent-d','k-int-d'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=''});
   if(activeIdx>0){
     const p=statements[activeIdx-1];
     setDelta('k-bal-d',s.closing_balance,p.closing_balance,true);
     setDelta('k-spent-d',s.total_debits,p.total_debits,true);
     setDelta('k-int-d',s.interest,p.interest,true);
-  } else {
-    ['k-bal-d','k-spent-d','k-int-d'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=''});
   }
-  // Category bars
   const cats={};
   s.transactions.forEach(t=>{cats[t.category]=(cats[t.category]||0)+t.amount});
   const sorted=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
@@ -393,10 +336,9 @@ function render(){
   document.getElementById('cat-bars').innerHTML=sorted.map(([cat,amt],i)=>`
     <div class="cat-item">
       <div class="cat-name" title="${cat}">${cat}</div>
-      <div class="bar-wrap"><div class="bar-fill" style="width:${(amt/maxAmt*100).toFixed(1)}%;background:${CAT_COLORS[i%CAT_COLORS.length]}"></div></div>
+      <div class="bar-wrap"><div class="bar-fill" style="width:${(amt/maxAmt*100).toFixed(1)}%;background:${COLORS[i%COLORS.length]}"></div></div>
       <div class="cat-amt">${fmt(amt)}</div>
     </div>`).join('');
-  // Debt tracker
   document.getElementById('debt-tbody').innerHTML=statements.map((st,i)=>{
     const prev=statements[i-1];
     let badge=`<span class="badge badge-new">First</span>`;
@@ -405,52 +347,42 @@ function render(){
       <td>${st.period}</td><td>${fmt(st.total_debits)}</td><td>${fmt(st.total_payments)}</td>
       <td>${fmt(st.closing_balance)}</td><td>${badge}</td></tr>`;
   }).join('');
-  // Leaks
   const leakThresh={'Dining & Takeaway':150,'Subscriptions':80,'Shopping':100,'Entertainment':50,'Personal Care':80,'Hobbies & Recreation':60};
   const leaks=sorted.filter(([cat,amt])=>leakThresh[cat]&&amt>leakThresh[cat]);
   document.getElementById('leaks-list').innerHTML=leaks.length?leaks.map(([cat,amt])=>{
-    const p=(amt/s.total_debits*100).toFixed(0);
-    const lvl=p>12?'h':p>6?'m':'l';
+    const p=(amt/s.total_debits*100).toFixed(0),lvl=p>12?'h':p>6?'m':'l';
     return `<div class="leak"><div class="leak-dot dot-${lvl}"></div><div class="leak-body"><div class="leak-cat">${cat}</div><div class="leak-note">${p}% of total spend</div></div><div class="leak-amt">${fmt(amt)}</div></div>`;
   }).join(''):'<div style="color:var(--muted);font-size:13px;padding:12px 0">No major leaks detected 🎉</div>';
-  // Subs
   const subCats=['Subscriptions','Phone & Internet','Utilities'];
   const subs=sorted.filter(([cat])=>subCats.includes(cat));
   document.getElementById('subs-list').innerHTML=subs.length?subs.map(([cat,amt])=>`
     <div class="leak"><div class="leak-dot dot-m"></div><div class="leak-body"><div class="leak-cat">${cat}</div><div class="leak-note">Recurring this period</div></div><div class="leak-amt">${fmt(amt)}</div></div>`).join('')
     :'<div style="color:var(--muted);font-size:13px;padding:12px 0">No recurring spend found.</div>';
-  // Transactions
   document.getElementById('tx-count').textContent=`${s.transactions.length} transactions`;
   document.getElementById('tx-tbody').innerHTML=s.transactions.map(t=>`
     <tr><td>${t.date}</td><td>${t.merchant}</td><td><span class="pill">${t.category}</span></td>
     <td style="text-align:right;font-weight:600">${fmt(t.amount)}</td></tr>`).join('');
-  // Sync
-  const dot=document.getElementById('sync-dot');
-  const txt=document.getElementById('sync-text');
-  const lnk=document.getElementById('sync-link');
+  const dot=document.getElementById('sync-dot'),txt=document.getElementById('sync-text'),lnk=document.getElementById('sync-link');
   dot.className='sync-dot';
   if(sheetURL){
     txt.textContent='Synced to Google Sheet';lnk.textContent='Open Sheet ↗';lnk.href=sheetURL;
     document.getElementById('sheet-btn').style.display='';
   } else {
-    dot.classList.add('err');txt.textContent='Saved locally only — add Apps Script URL to sync';lnk.textContent='';
+    dot.classList.add('err');txt.textContent='Saved locally — connect Apps Script to sync to Google Sheet';lnk.textContent='';
   }
 }
 
 function switchPeriod(i){activeIdx=i;render()}
 function fmt(n){if(n==null)return'—';return'$'+Number(n).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}
 function setDelta(id,curr,prev,higherIsBad){
-  const el=document.getElementById(id); if(!el||prev==null)return;
+  const el=document.getElementById(id);if(!el||prev==null)return;
   const diff=curr-prev,pct=((diff/prev)*100).toFixed(1),up=diff>0,bad=higherIsBad?up:!up;
   el.className='kpi-delta '+(bad?'up':'dn');
   el.textContent=(up?'▲ ':'▼ ')+fmt(Math.abs(diff))+` (${Math.abs(pct)}%) vs prev`;
 }
-function setProc(active,msg){
-  document.getElementById('processing').classList.toggle('active',active);
-  if(msg)document.getElementById('proc-step').textContent=msg;
-}
+function setProc(active,msg){document.getElementById('processing').classList.toggle('active',active);if(msg)document.getElementById('proc-step').textContent=msg}
 function setStep(msg){document.getElementById('proc-step').textContent=msg}
-function showError(msg){const el=document.getElementById('error-box');el.textContent='⚠ '+msg;el.classList.add('active')}
+function showError(msg){const el=document.getElementById('error-box');el.innerHTML='⚠ '+msg;el.classList.add('active')}
 function hideError(){document.getElementById('error-box').classList.remove('active')}
 </script>
 </body>
