@@ -68,7 +68,7 @@ main{max-width:900px;margin:0 auto;padding:14px 12px 32px}
 #dashboard{display:none}
 #dashboard.active{display:block}
 
-/* STATEMENT HEADER */
+/* STMT HEADER */
 .stmt-header{margin-bottom:10px}
 .stmt-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .stmt-title-block{display:flex;flex-direction:column;gap:2px}
@@ -86,7 +86,7 @@ main{max-width:900px;margin:0 auto;padding:14px 12px 32px}
 .btn-outline:hover{border-color:var(--accent)!important;color:var(--accent)}
 .btn-primary{background:var(--accent);color:white}
 
-/* HEALTH BANNER — slim single line */
+/* HEALTH BANNER */
 .health-banner{border-radius:7px;padding:9px 13px;margin-bottom:10px;display:flex;align-items:center;gap:9px}
 .health-banner.good{background:var(--good-pale)}.health-banner.bad{background:var(--bad-pale)}.health-banner.neutral{background:var(--warn-pale)}
 .health-icon{font-size:15px;flex-shrink:0}
@@ -109,16 +109,19 @@ main{max-width:900px;margin:0 auto;padding:14px 12px 32px}
 /* CARDS */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:11px 13px}
 .card-head{font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:9px;display:flex;align-items:center;justify-content:space-between}
-.card-head-r{font-weight:400;text-transform:none;letter-spacing:0;font-size:10px}
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:7px}
-.grid-chart{display:grid;grid-template-columns:1.4fr 1fr;gap:7px;margin-bottom:7px}
+.card-head-r{font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;color:var(--muted)}
 
-/* CHART */
-#trend-canvas-wrap{position:relative;height:155px;width:100%}
-canvas#trend-chart{width:100%;height:100%;display:block}
+/* CHART ROWS */
+.chart-row{display:grid;grid-template-columns:1.4fr 1fr;gap:7px;margin-bottom:7px}
+.chart-full{margin-bottom:7px}
+.canvas-wrap{position:relative;width:100%}
+.canvas-wrap.h140{height:140px}
+.canvas-wrap.h130{height:130px}
+canvas{width:100%;height:100%;display:block}
 .chart-legend{display:flex;gap:10px;margin-top:6px;flex-wrap:wrap}
 .legend-item{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)}
-.legend-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.legend-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.legend-rect{width:10px;height:7px;border-radius:2px;flex-shrink:0}
 
 /* CATEGORIES */
 .cat-row{display:flex;align-items:center;gap:7px;margin-bottom:6px}
@@ -135,6 +138,9 @@ canvas#trend-chart{width:100%;height:100%;display:block}
 .debt-table tr.cur td{font-weight:600;background:var(--bg)}
 .trend-pill{display:inline-flex;padding:1px 4px;border-radius:3px;font-size:9px;font-weight:600}
 .pill-up{background:var(--bad-pale);color:var(--bad)}.pill-dn{background:var(--good-pale);color:var(--good)}.pill-new{background:var(--bg);color:var(--muted)}
+
+/* GRIDS */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:7px}
 
 /* LEAKS */
 .leak-row{display:flex;align-items:center;gap:7px;padding:6px 0;border-bottom:1px solid var(--border)}
@@ -165,7 +171,7 @@ table.tx tr:hover td{background:var(--bg)}
   .kpi-grid{grid-template-columns:1fr 1fr}
   .kpi:last-child{grid-column:span 2}
   .kpi-value{font-size:15px}
-  .grid-2,.grid-chart{grid-template-columns:1fr}
+  .chart-row,.grid-2{grid-template-columns:1fr}
   .tx-search{width:100%}
   .tx-head{flex-direction:column;align-items:flex-start;gap:5px}
   table.tx th:nth-child(2),table.tx td:nth-child(2){display:none}
@@ -213,7 +219,9 @@ table.tx tr:hover td{background:var(--bg)}
     <div class="proc-label">Reading your statement</div>
     <div class="proc-sub" id="proc-sub">Sending to Apps Script…</div>
   </div>
+
   <div id="dashboard">
+    <!-- HEADER -->
     <div class="stmt-header">
       <div class="stmt-top">
         <div class="stmt-title-block">
@@ -231,35 +239,53 @@ table.tx tr:hover td{background:var(--bg)}
         </div>
       </div>
     </div>
+
+    <!-- HEALTH -->
     <div class="health-banner" id="health-banner">
       <div class="health-icon" id="health-icon">—</div>
       <div class="health-text"><div class="health-headline" id="health-headline">—</div><div class="health-detail" id="health-detail">—</div></div>
       <div class="health-badge" id="health-badge">—</div>
     </div>
+
+    <!-- KPIs -->
     <div class="kpi-grid">
       <div class="kpi"><div class="kpi-label">Debt balance</div><div class="kpi-value" id="k-bal">—</div><div class="kpi-sub" id="k-bal-sub"></div><div id="k-bal-d"></div></div>
       <div class="kpi"><div class="kpi-label">Net change</div><div class="kpi-value" id="k-net">—</div><div class="kpi-sub" id="k-net-sub"></div></div>
       <div class="kpi"><div class="kpi-label">Interest cost</div><div class="kpi-value" id="k-int">—</div><div class="kpi-sub" id="k-int-sub"></div><div id="k-int-d"></div></div>
     </div>
-    <div class="grid-chart">
+
+    <!-- CHARTS ROW: balance line + history table -->
+    <div class="chart-row">
       <div class="card">
         <div class="card-head">Balance over time <span class="card-head-r" id="trend-label"></span></div>
-        <div id="trend-canvas-wrap"><canvas id="trend-chart"></canvas></div>
-        <div class="chart-legend">
-          <div class="legend-item"><div class="legend-dot" style="background:#C4673A"></div>Balance</div>
-          <div class="legend-item"><div class="legend-dot" style="background:#2D6A4F"></div>Payments</div>
-          <div class="legend-item"><div class="legend-dot" style="background:#B07D2A"></div>Interest ×10</div>
-        </div>
+        <div class="canvas-wrap h140"><canvas id="chart-balance"></canvas></div>
       </div>
       <div class="card">
         <div class="card-head">All periods</div>
         <table class="debt-table"><thead><tr><th>Period</th><th>Spent</th><th>Paid</th><th>Trend</th></tr></thead><tbody id="debt-tbody"></tbody></table>
       </div>
     </div>
+
+    <!-- LAST 6 MONTHS CHART: grouped bars -->
+    <div class="chart-full">
+      <div class="card">
+        <div class="card-head">Last 6 months — spent vs paid vs interest <span class="card-head-r" id="bar-label"></span></div>
+        <div class="canvas-wrap h130"><canvas id="chart-bars"></canvas></div>
+        <div class="chart-legend">
+          <div class="legend-item"><div class="legend-rect" style="background:#C4673A"></div>Spent</div>
+          <div class="legend-item"><div class="legend-rect" style="background:#2D6A4F"></div>Paid</div>
+          <div class="legend-item"><div class="legend-rect" style="background:#B07D2A"></div>Interest</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CATEGORIES + LEAKS -->
     <div class="grid-2">
       <div class="card"><div class="card-head">Breakdown <span class="card-head-r" id="cat-period-lbl"></span></div><div id="cat-bars"></div></div>
       <div class="card"><div class="card-head">Budget leaks</div><div id="leaks-list"></div></div>
     </div>
+
+    <!-- TRANSACTIONS -->
     <div class="tx-section">
       <div class="tx-head">
         <div><span class="tx-label">Transactions</span><span class="tx-count" id="tx-count"></span></div>
@@ -272,12 +298,27 @@ table.tx tr:hover td{background:var(--bg)}
     </div>
   </div>
 </main>
+
 <script>
 const CAT_COLORS=['#C4673A','#C47C1A','#2D6A4F','#2A6B9E','#7A3D7A','#3D6B6B','#8C5A2A','#4A6741','#9A4A3D','#2A4A7A'];
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 let statements=[],activeIdx=0;
 let scriptURL=localStorage.getItem('nest_script_url')||'';
 let secretToken=localStorage.getItem('nest_secret')||'';
 let sheetURL=localStorage.getItem('nest_sheet_url')||'';
+
+// Short label: "Mar '25" from period_end date or period string
+function shortLabel(st){
+  if(st.period_end){
+    const d=new Date(st.period_end+'T00:00:00');
+    return MONTHS[d.getMonth()]+' \''+String(d.getFullYear()).slice(2);
+  }
+  // fallback: parse "Jan-Feb 2026" → "Feb '26"
+  const parts=st.period.split(/[\s\-]+/);
+  const yr=parts.find(p=>/^\d{4}$/.test(p))||'';
+  const mon=parts.length>=2?parts[1]:parts[0];
+  return mon+(yr?" '"+yr.slice(2):'');
+}
 
 window.onload=async()=>{
   if(scriptURL){
@@ -337,7 +378,7 @@ function handleDrop(e){e.preventDefault();document.getElementById('drop-zone').c
 async function handleFile(file){
   if(!file)return;
   if(!scriptURL){showError('Add your Apps Script URL first.');return}
-  setProc(true,'Sending PDF to Apps Script…');hideError();
+  setProc(true,'Sending PDF…');hideError();
   try{
     const b64=await toBase64(file);
     setProc(true,'AI is reading & categorising…');
@@ -362,9 +403,15 @@ function render(){
   if(!statements.length)return;
   const s=statements[activeIdx];
   const prev=activeIdx>0?statements[activeIdx-1]:null;
-  document.getElementById('period-select').innerHTML=statements.map((st,i)=>`<option value="${i}"${i===activeIdx?' selected':''}>${st.period}</option>`).join('');
-  document.getElementById('stmt-title').innerHTML=`ANZ Frequent Flyer — <em>${s.period}</em>`;
+
+  // Dropdown — use short labels
+  document.getElementById('period-select').innerHTML=statements.map((st,i)=>
+    `<option value="${i}"${i===activeIdx?' selected':''}>${shortLabel(st)}</option>`
+  ).join('');
+
+  document.getElementById('stmt-title').innerHTML=`ANZ Frequent Flyer — <em>${shortLabel(s)}</em>`;
   document.getElementById('stmt-dates').textContent=s.period_start&&s.period_end?`${fmtDate(s.period_start)} → ${fmtDate(s.period_end)}`:'';
+
   const net=s.closing_balance-s.opening_balance;
   const intPct=s.closing_balance>0?(s.interest/s.closing_balance*100):0;
   const isFlat=Math.abs(net)<10,isImproving=net<0;
@@ -375,6 +422,7 @@ function render(){
   if(isFlat){document.getElementById('health-headline').textContent='Balance held steady';document.getElementById('health-detail').textContent=`Spent ${fmt(s.total_debits)}, paid ${fmt(s.total_payments)}`}
   else if(isImproving){document.getElementById('health-headline').textContent=`Debt reduced by ${fmt(Math.abs(net))}`;document.getElementById('health-detail').textContent='Paid more than you spent — keep it up'}
   else{const be=Math.max(0,s.total_debits-s.total_payments+s.interest);document.getElementById('health-headline').textContent=`Debt grew by ${fmt(net)} this period`;document.getElementById('health-detail').textContent=`Pay ${fmt(be+s.total_payments)} next month to reduce balance`}
+
   document.getElementById('k-bal').textContent=fmt(s.closing_balance);
   document.getElementById('k-bal-sub').textContent=`was ${fmt(s.opening_balance)} at start`;
   document.getElementById('k-net').textContent=(net>=0?'+':'−')+fmt(Math.abs(net));
@@ -383,47 +431,47 @@ function render(){
   document.getElementById('k-int-sub').textContent=`${fmt(s.interest)} charged`;
   ['k-bal-d','k-int-d'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=''});
   if(prev){renderDelta('k-bal-d',s.closing_balance,prev.closing_balance,true);renderDelta('k-int-d',s.interest,prev.interest,true)}
-  drawChart();
+
+  drawBalanceLine();
+  drawGroupedBars();
+
+  // History table — short labels
   document.getElementById('debt-tbody').innerHTML=statements.map((st,i)=>{
     const p=statements[i-1];const d=st.closing_balance-st.opening_balance;
     let pill=`<span class="trend-pill pill-new">—</span>`;
     if(p)pill=d>0?`<span class="trend-pill pill-up">▲${fmt(Math.abs(d))}</span>`:`<span class="trend-pill pill-dn">▼${fmt(Math.abs(d))}</span>`;
-    return`<tr class="${i===activeIdx?'cur':''}"><td>${st.period}</td><td>${fmt(st.total_debits)}</td><td>${fmt(st.total_payments)}</td><td>${pill}</td></tr>`;
+    return`<tr class="${i===activeIdx?'cur':''}"><td>${shortLabel(st)}</td><td>${fmt(st.total_debits)}</td><td>${fmt(st.total_payments)}</td><td>${pill}</td></tr>`;
   }).join('');
+
+  // Categories
   const cats={};s.transactions.forEach(t=>{cats[t.category]=(cats[t.category]||0)+t.amount});
   const sorted=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
   const maxAmt=sorted[0]?.[1]||1;
-  document.getElementById('cat-period-lbl').textContent=s.period;
+  document.getElementById('cat-period-lbl').textContent=shortLabel(s);
   document.getElementById('cat-bars').innerHTML=sorted.map(([cat,amt],i)=>`<div class="cat-row"><div class="cat-name" title="${cat}">${cat}</div><div class="cat-track"><div class="cat-fill" style="width:${(amt/maxAmt*100).toFixed(1)}%;background:${CAT_COLORS[i%CAT_COLORS.length]}"></div></div><div class="cat-val">${fmt(amt)}</div></div>`).join('');
+
+  // Leaks
   const leakCats={'Dining & Takeaway':120,'Subscriptions':60,'Shopping':80,'Entertainment':40,'Hobbies & Recreation':50};
   const leaks=sorted.filter(([cat,amt])=>leakCats[cat]&&amt>leakCats[cat]);
   document.getElementById('leaks-list').innerHTML=leaks.length?leaks.map(([cat,amt])=>{const p=(amt/s.total_debits*100).toFixed(0);return`<div class="leak-row"><div class="leak-dot" style="background:${p>12?'var(--bad)':p>6?'var(--warn)':'var(--good)'}"></div><div class="leak-name">${cat}</div><div class="leak-pct">${p}%</div><div class="leak-amt">${fmt(amt)}</div></div>`}).join(''):'<div style="font-size:11px;color:var(--muted);padding:6px 0">Nothing flagged 🎉</div>';
+
   renderTxTable(s.transactions,'');
   document.getElementById('sheet-btn').style.display=sheetURL?'':'none';
 }
 
-function renderTxTable(txs,query){
-  const f=query?txs.filter(t=>t.merchant.toLowerCase().includes(query.toLowerCase())||t.category.toLowerCase().includes(query.toLowerCase())):txs;
-  document.getElementById('tx-count').textContent=f.length+(query?' results':' transactions');
-  document.getElementById('tx-tbody').innerHTML=f.map(t=>`<tr><td>${t.date}</td><td>${t.merchant}</td><td><span class="cat-tag">${t.category}</span></td><td style="text-align:right;font-variant-numeric:tabular-nums">${fmt(t.amount)}</td></tr>`).join('');
-}
-function filterTx(){if(!statements.length)return;renderTxTable(statements[activeIdx].transactions,document.getElementById('tx-search').value)}
-
-function drawChart(){
-  const canvas=document.getElementById('trend-chart');
-  const wrap=document.getElementById('trend-canvas-wrap');
+// ── CHART 1: Balance line only ────────────────────────────────────────────────
+function drawBalanceLine(){
+  const canvas=document.getElementById('chart-balance');
+  const wrap=canvas.parentElement;
   const dpr=window.devicePixelRatio||1;
-  const W=wrap.offsetWidth||360,H=wrap.offsetHeight||155;
+  const W=wrap.offsetWidth||400,H=wrap.offsetHeight||140;
   canvas.width=W*dpr;canvas.height=H*dpr;
   canvas.style.width=W+'px';canvas.style.height=H+'px';
-  const ctx=canvas.getContext('2d');
-  ctx.scale(dpr,dpr);ctx.clearRect(0,0,W,H);
+  const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,W,H);
   const n=statements.length;if(!n)return;
-  const pad={top:18,right:12,bottom:24,left:44};
+  const pad={top:18,right:12,bottom:22,left:44};
   const cW=W-pad.left-pad.right,cH=H-pad.top-pad.bottom;
-  const maxBal=Math.max(...statements.map(s=>s.closing_balance),1);
-  const maxPay=Math.max(...statements.map(s=>s.total_payments),1);
-  const maxVal=Math.max(maxBal,maxPay)*1.15;
+  const maxVal=Math.max(...statements.map(s=>s.closing_balance))*1.15||1;
   const xP=i=>pad.left+(n===1?cW/2:(i/(n-1))*cW);
   const yP=v=>pad.top+cH-(Math.min(v,maxVal)/maxVal)*cH;
 
@@ -436,71 +484,137 @@ function drawChart(){
     ctx.fillText('$'+Math.round((maxVal-(i/3)*maxVal)/1000)+'k',pad.left-4,y+3);
   }
 
-  // Active period highlight column
+  // Active highlight
   if(n>1){
-    const x=xP(activeIdx);
-    const hw=Math.max(16,cW/(n-1)*.55);
-    ctx.fillStyle='rgba(196,103,58,0.08)';
-    ctx.beginPath();
-    roundRect(ctx,x-hw/2,pad.top,hw,cH,3);
-    ctx.fill();
+    const hw=Math.max(14,cW/(n-1)*.5);
+    ctx.fillStyle='rgba(196,103,58,0.09)';
+    rrect(ctx,xP(activeIdx)-hw/2,pad.top,hw,cH,3);ctx.fill();
   }
 
-  // X labels — smart skip when crowded
+  // X labels — smart skip
   ctx.fillStyle='#9A9590';ctx.font='9px Inter';ctx.textAlign='center';
-  const skip=Math.ceil(n/Math.floor(cW/32));
-  statements.forEach((s,i)=>{
+  const skip=Math.ceil(n/Math.floor(cW/30));
+  statements.forEach((st,i)=>{
     if(i%skip!==0&&i!==n-1)return;
-    ctx.fillText(s.period.split('-')[0],xP(i),H-3);
+    ctx.fillText(shortLabel(st),xP(i),H-3);
   });
 
-  // Balance fill under curve
-  ctx.beginPath();ctx.fillStyle='rgba(196,103,58,0.06)';
+  // Area fill
+  ctx.beginPath();ctx.fillStyle='rgba(196,103,58,0.07)';
   statements.forEach((s,i)=>i===0?ctx.moveTo(xP(i),yP(s.closing_balance)):ctx.lineTo(xP(i),yP(s.closing_balance)));
   ctx.lineTo(xP(n-1),pad.top+cH);ctx.lineTo(xP(0),pad.top+cH);ctx.closePath();ctx.fill();
 
-  // Interest line (scaled ×10 to be visible)
-  drawLine(ctx,statements.map((s,i)=>({x:xP(i),y:yP(s.interest*10)})),'#B07D2A',1.5,[3,2]);
-  // Payments line
-  drawLine(ctx,statements.map((s,i)=>({x:xP(i),y:yP(s.total_payments)})),'#2D6A4F',1.8,[4,3]);
-  // Balance line (solid, on top)
-  drawLine(ctx,statements.map((s,i)=>({x:xP(i),y:yP(s.closing_balance)})),'#C4673A',2.5,[]);
+  // Line
+  ctx.beginPath();ctx.strokeStyle='#C4673A';ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.lineCap='round';ctx.setLineDash([]);
+  statements.forEach((s,i)=>i===0?ctx.moveTo(xP(i),yP(s.closing_balance)):ctx.lineTo(xP(i),yP(s.closing_balance)));
+  ctx.stroke();
 
   // Dots
   statements.forEach((s,i)=>{
     const isA=i===activeIdx;
     dot(ctx,xP(i),yP(s.closing_balance),'#C4673A',isA?5:3,isA);
-    dot(ctx,xP(i),yP(s.total_payments),'#2D6A4F',isA?3.5:2,false);
-    dot(ctx,xP(i),yP(s.interest*10),'#B07D2A',isA?3.5:2,false);
   });
 
-  // Active period value label
+  // Active value label
   const as=statements[activeIdx];
   const ax=xP(activeIdx),ay=yP(as.closing_balance);
-  const labelX=Math.min(Math.max(ax,pad.left+20),pad.left+cW-20);
+  const lx=Math.min(Math.max(ax,pad.left+18),pad.left+cW-18);
   ctx.fillStyle='#C4673A';ctx.font='bold 9px Inter';ctx.textAlign='center';
-  ctx.fillText(fmt(as.closing_balance),labelX,Math.max(pad.top+8,ay-7));
+  ctx.fillText(fmt(as.closing_balance),lx,Math.max(pad.top+8,ay-7));
 
   document.getElementById('trend-label').textContent=`${n} period${n!==1?'s':''}`;
 }
 
-function drawLine(ctx,pts,color,width,dash){
-  ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=width;
-  ctx.lineJoin='round';ctx.lineCap='round';ctx.setLineDash(dash);
-  pts.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));
-  ctx.stroke();ctx.setLineDash([]);
+// ── CHART 2: Grouped bars — last 6 months ────────────────────────────────────
+function drawGroupedBars(){
+  const canvas=document.getElementById('chart-bars');
+  const wrap=canvas.parentElement;
+  const dpr=window.devicePixelRatio||1;
+  const W=wrap.offsetWidth||700,H=wrap.offsetHeight||130;
+  canvas.width=W*dpr;canvas.height=H*dpr;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,W,H);
+
+  const slice=statements.slice(-6);
+  const n=slice.length;
+  if(!n)return;
+
+  const pad={top:14,right:10,bottom:22,left:46};
+  const cW=W-pad.left-pad.right,cH=H-pad.top-pad.bottom;
+
+  const maxVal=Math.max(...slice.map(s=>Math.max(s.total_debits,s.total_payments)))*1.2||1;
+  const yP=v=>pad.top+cH-(Math.min(v,maxVal)/maxVal)*cH;
+
+  // Grid
+  ctx.strokeStyle='#E8E4DC';ctx.lineWidth=1;
+  for(let i=0;i<=3;i++){
+    const y=pad.top+(i/3)*cH;
+    ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(pad.left+cW,y);ctx.stroke();
+    ctx.fillStyle='#9A9590';ctx.font='9px Inter';ctx.textAlign='right';
+    ctx.fillText('$'+Math.round((maxVal-(i/3)*maxVal)/1000)+'k',pad.left-4,y+3);
+  }
+
+  const groupW=cW/n;
+  const barW=Math.min(18,groupW*.22);
+  const gap=2;
+
+  slice.forEach((s,i)=>{
+    const gx=pad.left+i*groupW+groupW/2;
+    const isActive=statements.indexOf(s)===activeIdx;
+
+    // Subtle active bg
+    if(isActive){
+      ctx.fillStyle='rgba(196,103,58,0.07)';
+      rrect(ctx,gx-barW*1.5-gap,pad.top,barW*3+gap*2+4,cH,3);ctx.fill();
+    }
+
+    // Spent bar
+    const spentY=yP(s.total_debits),baseY=pad.top+cH;
+    ctx.fillStyle=isActive?'#C4673A':'rgba(196,103,58,0.55)';
+    rrectTop(ctx,gx-barW*1.5-gap,spentY,barW,baseY-spentY,3);ctx.fill();
+
+    // Paid bar
+    const paidY=yP(s.total_payments);
+    ctx.fillStyle=isActive?'#2D6A4F':'rgba(45,106,79,0.55)';
+    rrectTop(ctx,gx-barW/2,paidY,barW,baseY-paidY,3);ctx.fill();
+
+    // Interest bar (scaled ×5 for visibility)
+    const intScaled=s.interest*5;
+    const intY=yP(intScaled);
+    ctx.fillStyle=isActive?'#B07D2A':'rgba(176,125,42,0.55)';
+    rrectTop(ctx,gx+barW/2+gap,intY,barW,baseY-intY,3);ctx.fill();
+
+    // X label
+    ctx.fillStyle=isActive?'#1A1916':'#9A9590';
+    ctx.font=isActive?'bold 9px Inter':'9px Inter';
+    ctx.textAlign='center';
+    ctx.fillText(shortLabel(s),gx,H-3);
+  });
+
+  // Active period — interest actual value label above bar
+  const as=slice[slice.length-1-(slice.length-1-(statements.indexOf(statements[activeIdx])-( statements.length-slice.length)))];
+  const activeInSlice=slice.findIndex(s=>statements.indexOf(s)===activeIdx);
+  if(activeInSlice>=0){
+    const s=slice[activeInSlice];
+    const gx=pad.left+activeInSlice*groupW+groupW/2;
+    ctx.fillStyle='#B07D2A';ctx.font='bold 8px Inter';ctx.textAlign='center';
+    ctx.fillText(fmt(s.interest),gx+barW,Math.max(pad.top+8,yP(s.interest*5)-4));
+  }
+
+  document.getElementById('bar-label').textContent=`Interest bar ×5 for scale`;
 }
-function dot(ctx,x,y,color,r,filled){
-  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);
-  ctx.fillStyle=filled?color:'#fff';ctx.strokeStyle=color;ctx.lineWidth=1.5;
-  ctx.fill();ctx.stroke();
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function renderTxTable(txs,query){
+  const f=query?txs.filter(t=>t.merchant.toLowerCase().includes(query.toLowerCase())||t.category.toLowerCase().includes(query.toLowerCase())):txs;
+  document.getElementById('tx-count').textContent=f.length+(query?' results':' transactions');
+  document.getElementById('tx-tbody').innerHTML=f.map(t=>`<tr><td>${t.date}</td><td>${t.merchant}</td><td><span class="cat-tag">${t.category}</span></td><td style="text-align:right;font-variant-numeric:tabular-nums">${fmt(t.amount)}</td></tr>`).join('');
 }
-function roundRect(ctx,x,y,w,h,r){
-  ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);
-  ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
-  ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
-  ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();
-}
+function filterTx(){if(!statements.length)return;renderTxTable(statements[activeIdx].transactions,document.getElementById('tx-search').value)}
+
+function dot(ctx,x,y,color,r,filled){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=filled?color:'#fff';ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.fill();ctx.stroke()}
+function rrect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath()}
+function rrectTop(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h);ctx.lineTo(x,y+h);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath()}
 
 function switchPeriod(val){activeIdx=parseInt(val);render()}
 function fmt(n){if(n==null)return'—';return'$'+Number(n).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}
@@ -510,14 +624,10 @@ function renderDelta(id,curr,prev,higherIsBad){
   const diff=curr-prev,up=diff>0,bad=higherIsBad?up:!up,pct=prev?Math.abs(diff/prev*100).toFixed(0):0;
   el.innerHTML=`<span class="kpi-delta ${bad?'delta-up':'delta-dn'}">${up?'▲':'▼'} ${fmt(Math.abs(diff))} (${pct}%)</span>`;
 }
-function setProc(active,msg){
-  document.getElementById('processing').classList.toggle('active',active);
-  document.getElementById('upload-section').classList.toggle('hidden',active);
-  if(msg)document.getElementById('proc-sub').textContent=msg;
-}
+function setProc(active,msg){document.getElementById('processing').classList.toggle('active',active);document.getElementById('upload-section').classList.toggle('hidden',active);if(msg)document.getElementById('proc-sub').textContent=msg}
 function showError(msg){const el=document.getElementById('error-msg');el.textContent='⚠ '+msg;el.classList.add('active')}
 function hideError(){document.getElementById('error-msg').classList.remove('active')}
-window.addEventListener('resize',()=>{if(document.getElementById('dashboard').classList.contains('active'))drawChart()});
+window.addEventListener('resize',()=>{if(document.getElementById('dashboard').classList.contains('active')){drawBalanceLine();drawGroupedBars()}});
 </script>
 </body>
 </html>
