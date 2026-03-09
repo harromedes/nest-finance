@@ -109,9 +109,7 @@ main{max-width:900px;margin:0 auto;padding:14px 12px 32px}
 /* CARDS */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:11px 13px}
 .card-head{font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:9px;display:flex;align-items:center;justify-content:space-between}
-.card-head-r{font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;color:var(--muted)}
-
-/* CHART ROWS */
+.card-head-r{font-weight:400;text-transform:none;letter-spacing:0;font-size:10px}
 .chart-row{display:grid;grid-template-columns:1.4fr 1fr;gap:7px;margin-bottom:7px}
 .chart-full{margin-bottom:7px}
 .canvas-wrap{position:relative;width:100%}
@@ -120,8 +118,9 @@ main{max-width:900px;margin:0 auto;padding:14px 12px 32px}
 canvas{width:100%;height:100%;display:block}
 .chart-legend{display:flex;gap:10px;margin-top:6px;flex-wrap:wrap}
 .legend-item{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)}
-.legend-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.legend-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 .legend-rect{width:10px;height:7px;border-radius:2px;flex-shrink:0}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:7px}
 
 /* CATEGORIES */
 .cat-row{display:flex;align-items:center;gap:7px;margin-bottom:6px}
@@ -138,9 +137,6 @@ canvas{width:100%;height:100%;display:block}
 .debt-table tr.cur td{font-weight:600;background:var(--bg)}
 .trend-pill{display:inline-flex;padding:1px 4px;border-radius:3px;font-size:9px;font-weight:600}
 .pill-up{background:var(--bad-pale);color:var(--bad)}.pill-dn{background:var(--good-pale);color:var(--good)}.pill-new{background:var(--bg);color:var(--muted)}
-
-/* GRIDS */
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:7px}
 
 /* LEAKS */
 .leak-row{display:flex;align-items:center;gap:7px;padding:6px 0;border-bottom:1px solid var(--border)}
@@ -164,6 +160,53 @@ table.tx tr:last-child td{border-bottom:none}
 table.tx tr:hover td{background:var(--bg)}
 .cat-tag{display:inline-block;background:var(--bg);border:1px solid var(--border);color:var(--ink);padding:1px 5px;border-radius:3px;font-size:9px;font-weight:500;white-space:nowrap}
 
+/* ── PAYOFF PLANNER ────────────────────────────────────────────────────────── */
+.planner-card{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:14px 16px;margin-bottom:7px}
+.planner-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+.planner-title{font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px}
+.planner-balance{font-size:11px;color:var(--muted)}
+.planner-balance strong{color:var(--text);font-weight:600}
+
+.planner-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.planner-label{font-size:11px;color:var(--ink);flex-shrink:0}
+.planner-date{border:1px solid var(--border);background:var(--bg);color:var(--text);padding:7px 10px;border-radius:5px;font-family:'Inter',sans-serif;font-size:12px;cursor:pointer}
+.planner-date:focus{outline:none;border-color:var(--accent)}
+.planner-presets{display:flex;gap:5px;flex-wrap:wrap}
+.preset-btn{background:none;border:1px solid var(--border);color:var(--muted);padding:5px 9px;border-radius:5px;font-size:11px;font-family:'Inter',sans-serif;cursor:pointer;transition:all .15s}
+.preset-btn:hover,.preset-btn.active{border-color:var(--accent);color:var(--accent);background:var(--accent-pale)}
+
+/* Result banner */
+.planner-result{border-radius:7px;padding:12px 14px;margin-bottom:12px;display:none}
+.planner-result.show{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
+.planner-result.feasible{background:var(--good-pale);border:1px solid #b8ddc8}
+.planner-result.tight{background:var(--warn-pale);border:1px solid #e0c97a}
+.planner-result.impossible{background:var(--bad-pale);border:1px solid #f0bfbb}
+.planner-result-main{flex:1;min-width:160px}
+.planner-result-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px}
+.planner-result.feasible .planner-result-label{color:var(--good)}
+.planner-result.tight .planner-result-label{color:var(--warn)}
+.planner-result.impossible .planner-result-label{color:var(--bad)}
+.planner-payment{font-family:'Lora',serif;font-size:28px;font-weight:400;line-height:1;margin-bottom:3px}
+.planner-result.feasible .planner-payment{color:var(--good)}
+.planner-result.tight .planner-payment{color:var(--warn)}
+.planner-result.impossible .planner-payment{color:var(--bad)}
+.planner-result-sub{font-size:11px;color:var(--muted)}
+.planner-stats{display:flex;flex-direction:column;gap:4px;flex-shrink:0}
+.planner-stat{font-size:11px;color:var(--muted)}
+.planner-stat strong{color:var(--text)}
+
+/* Projection table */
+.proj-wrap{overflow-x:auto}
+.proj-table{width:100%;border-collapse:collapse;font-size:11px;min-width:340px}
+.proj-table th{text-align:left;padding:5px 8px;font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--border);background:var(--bg)}
+.proj-table td{padding:7px 8px;border-bottom:1px solid var(--border)}
+.proj-table tr:last-child td{border-bottom:none;font-weight:600;background:var(--good-pale)}
+.proj-table tr:last-child td:first-child::after{content:' 🎉'}
+.proj-bar-cell{width:120px}
+.proj-bar-wrap{height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+.proj-bar-fill{height:100%;border-radius:3px;background:var(--accent);transition:width .3s}
+.proj-good{color:var(--good)}.proj-warn{color:var(--warn)}.proj-bad{color:var(--bad)}
+
 /* MOBILE */
 @media(max-width:600px){
   main{padding:10px 10px 28px}
@@ -177,6 +220,9 @@ table.tx tr:hover td{background:var(--bg)}
   table.tx th:nth-child(2),table.tx td:nth-child(2){display:none}
   .cat-name{width:100px}
   .period-select{min-width:110px}
+  .planner-controls{flex-direction:column;align-items:flex-start}
+  .planner-payment{font-size:24px}
+  .proj-bar-cell{display:none}
 }
 @media(max-width:380px){
   .kpi-grid{grid-template-columns:1fr}
@@ -254,7 +300,7 @@ table.tx tr:hover td{background:var(--bg)}
       <div class="kpi"><div class="kpi-label">Interest cost</div><div class="kpi-value" id="k-int">—</div><div class="kpi-sub" id="k-int-sub"></div><div id="k-int-d"></div></div>
     </div>
 
-    <!-- CHARTS ROW: balance line + history table -->
+    <!-- CHARTS -->
     <div class="chart-row">
       <div class="card">
         <div class="card-head">Balance over time <span class="card-head-r" id="trend-label"></span></div>
@@ -265,8 +311,6 @@ table.tx tr:hover td{background:var(--bg)}
         <table class="debt-table"><thead><tr><th>Period</th><th>Spent</th><th>Paid</th><th>Trend</th></tr></thead><tbody id="debt-tbody"></tbody></table>
       </div>
     </div>
-
-    <!-- LAST 6 MONTHS CHART: grouped bars -->
     <div class="chart-full">
       <div class="card">
         <div class="card-head">Last 6 months — spent vs paid vs interest <span class="card-head-r" id="bar-label"></span></div>
@@ -276,6 +320,41 @@ table.tx tr:hover td{background:var(--bg)}
           <div class="legend-item"><div class="legend-rect" style="background:#2D6A4F"></div>Paid</div>
           <div class="legend-item"><div class="legend-rect" style="background:#B07D2A"></div>Interest</div>
         </div>
+      </div>
+    </div>
+
+    <!-- ── PAYOFF PLANNER ── -->
+    <div class="planner-card">
+      <div class="planner-head">
+        <span class="planner-title">Payoff planner</span>
+        <span class="planner-balance" id="planner-balance-label"></span>
+      </div>
+
+      <div class="planner-controls">
+        <span class="planner-label">I want to be debt-free by</span>
+        <input type="month" class="planner-date" id="planner-date" onchange="calcPayoff()">
+        <div class="planner-presets">
+          <button class="preset-btn" onclick="setPreset(6)">6 months</button>
+          <button class="preset-btn" onclick="setPreset(12)">1 year</button>
+          <button class="preset-btn" onclick="setPreset(18)">18 months</button>
+          <button class="preset-btn" onclick="setPreset(24)">2 years</button>
+        </div>
+      </div>
+
+      <div class="planner-result" id="planner-result">
+        <div class="planner-result-main">
+          <div class="planner-result-label" id="planner-result-label">—</div>
+          <div class="planner-payment" id="planner-payment">—</div>
+          <div class="planner-result-sub" id="planner-result-sub">per month</div>
+        </div>
+        <div class="planner-stats" id="planner-stats"></div>
+      </div>
+
+      <div class="proj-wrap" id="proj-wrap" style="display:none">
+        <table class="proj-table">
+          <thead><tr><th>Month</th><th>Payment</th><th>Interest</th><th>Balance</th><th class="proj-bar-cell"></th></tr></thead>
+          <tbody id="proj-tbody"></tbody>
+        </table>
       </div>
     </div>
 
@@ -301,19 +380,18 @@ table.tx tr:hover td{background:var(--bg)}
 
 <script>
 const CAT_COLORS=['#C4673A','#C47C1A','#2D6A4F','#2A6B9E','#7A3D7A','#3D6B6B','#8C5A2A','#4A6741','#9A4A3D','#2A4A7A'];
-const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTHS_NAMES=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DAILY_RATE=0.000575; // 20.99% p.a.
 let statements=[],activeIdx=0;
 let scriptURL=localStorage.getItem('nest_script_url')||'';
 let secretToken=localStorage.getItem('nest_secret')||'';
 let sheetURL=localStorage.getItem('nest_sheet_url')||'';
 
-// Short label: "Mar '25" from period_end date or period string
 function shortLabel(st){
   if(st.period_end){
     const d=new Date(st.period_end+'T00:00:00');
-    return MONTHS[d.getMonth()]+' \''+String(d.getFullYear()).slice(2);
+    return MONTHS_NAMES[d.getMonth()]+' \''+String(d.getFullYear()).slice(2);
   }
-  // fallback: parse "Jan-Feb 2026" → "Feb '26"
   const parts=st.period.split(/[\s\-]+/);
   const yr=parts.find(p=>/^\d{4}$/.test(p))||'';
   const mon=parts.length>=2?parts[1]:parts[0];
@@ -327,6 +405,8 @@ window.onload=async()=>{
     document.getElementById('config-panel').classList.add('hidden');
     await loadFromSheet();
   }
+  // Set default planner date to 12 months from now
+  setPreset(12,false);
 };
 
 function toggleConfig(){document.getElementById('config-panel').classList.toggle('hidden')}
@@ -403,15 +483,9 @@ function render(){
   if(!statements.length)return;
   const s=statements[activeIdx];
   const prev=activeIdx>0?statements[activeIdx-1]:null;
-
-  // Dropdown — use short labels
-  document.getElementById('period-select').innerHTML=statements.map((st,i)=>
-    `<option value="${i}"${i===activeIdx?' selected':''}>${shortLabel(st)}</option>`
-  ).join('');
-
+  document.getElementById('period-select').innerHTML=statements.map((st,i)=>`<option value="${i}"${i===activeIdx?' selected':''}>${shortLabel(st)}</option>`).join('');
   document.getElementById('stmt-title').innerHTML=`ANZ Frequent Flyer — <em>${shortLabel(s)}</em>`;
   document.getElementById('stmt-dates').textContent=s.period_start&&s.period_end?`${fmtDate(s.period_start)} → ${fmtDate(s.period_end)}`:'';
-
   const net=s.closing_balance-s.opening_balance;
   const intPct=s.closing_balance>0?(s.interest/s.closing_balance*100):0;
   const isFlat=Math.abs(net)<10,isImproving=net<0;
@@ -422,7 +496,6 @@ function render(){
   if(isFlat){document.getElementById('health-headline').textContent='Balance held steady';document.getElementById('health-detail').textContent=`Spent ${fmt(s.total_debits)}, paid ${fmt(s.total_payments)}`}
   else if(isImproving){document.getElementById('health-headline').textContent=`Debt reduced by ${fmt(Math.abs(net))}`;document.getElementById('health-detail').textContent='Paid more than you spent — keep it up'}
   else{const be=Math.max(0,s.total_debits-s.total_payments+s.interest);document.getElementById('health-headline').textContent=`Debt grew by ${fmt(net)} this period`;document.getElementById('health-detail').textContent=`Pay ${fmt(be+s.total_payments)} next month to reduce balance`}
-
   document.getElementById('k-bal').textContent=fmt(s.closing_balance);
   document.getElementById('k-bal-sub').textContent=`was ${fmt(s.opening_balance)} at start`;
   document.getElementById('k-net').textContent=(net>=0?'+':'−')+fmt(Math.abs(net));
@@ -431,35 +504,135 @@ function render(){
   document.getElementById('k-int-sub').textContent=`${fmt(s.interest)} charged`;
   ['k-bal-d','k-int-d'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=''});
   if(prev){renderDelta('k-bal-d',s.closing_balance,prev.closing_balance,true);renderDelta('k-int-d',s.interest,prev.interest,true)}
-
   drawBalanceLine();
   drawGroupedBars();
-
-  // History table — short labels
   document.getElementById('debt-tbody').innerHTML=statements.map((st,i)=>{
     const p=statements[i-1];const d=st.closing_balance-st.opening_balance;
     let pill=`<span class="trend-pill pill-new">—</span>`;
     if(p)pill=d>0?`<span class="trend-pill pill-up">▲${fmt(Math.abs(d))}</span>`:`<span class="trend-pill pill-dn">▼${fmt(Math.abs(d))}</span>`;
     return`<tr class="${i===activeIdx?'cur':''}"><td>${shortLabel(st)}</td><td>${fmt(st.total_debits)}</td><td>${fmt(st.total_payments)}</td><td>${pill}</td></tr>`;
   }).join('');
-
-  // Categories
   const cats={};s.transactions.forEach(t=>{cats[t.category]=(cats[t.category]||0)+t.amount});
   const sorted=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
   const maxAmt=sorted[0]?.[1]||1;
   document.getElementById('cat-period-lbl').textContent=shortLabel(s);
   document.getElementById('cat-bars').innerHTML=sorted.map(([cat,amt],i)=>`<div class="cat-row"><div class="cat-name" title="${cat}">${cat}</div><div class="cat-track"><div class="cat-fill" style="width:${(amt/maxAmt*100).toFixed(1)}%;background:${CAT_COLORS[i%CAT_COLORS.length]}"></div></div><div class="cat-val">${fmt(amt)}</div></div>`).join('');
-
-  // Leaks
   const leakCats={'Dining & Takeaway':120,'Subscriptions':60,'Shopping':80,'Entertainment':40,'Hobbies & Recreation':50};
   const leaks=sorted.filter(([cat,amt])=>leakCats[cat]&&amt>leakCats[cat]);
   document.getElementById('leaks-list').innerHTML=leaks.length?leaks.map(([cat,amt])=>{const p=(amt/s.total_debits*100).toFixed(0);return`<div class="leak-row"><div class="leak-dot" style="background:${p>12?'var(--bad)':p>6?'var(--warn)':'var(--good)'}"></div><div class="leak-name">${cat}</div><div class="leak-pct">${p}%</div><div class="leak-amt">${fmt(amt)}</div></div>`}).join(''):'<div style="font-size:11px;color:var(--muted);padding:6px 0">Nothing flagged 🎉</div>';
-
   renderTxTable(s.transactions,'');
   document.getElementById('sheet-btn').style.display=sheetURL?'':'none';
+  // Update planner balance label and recalc
+  const latest=statements[statements.length-1];
+  document.getElementById('planner-balance-label').innerHTML=`Starting from <strong>${fmt(latest.closing_balance)}</strong> (${shortLabel(latest)})`;
+  calcPayoff();
 }
 
-// ── CHART 1: Balance line only ────────────────────────────────────────────────
+// ── PAYOFF PLANNER ────────────────────────────────────────────────────────────
+function setPreset(months, doCalc=true){
+  // Remove active from all presets
+  document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('active'));
+  event&&event.target&&event.target.classList.add('active');
+  const now=new Date();
+  const target=new Date(now.getFullYear(),now.getMonth()+months,1);
+  const yr=target.getFullYear();
+  const mo=String(target.getMonth()+1).padStart(2,'0');
+  document.getElementById('planner-date').value=`${yr}-${mo}`;
+  if(doCalc) calcPayoff();
+}
+
+function calcPayoff(){
+  // Remove active state from presets when manually changing date
+  const dateInput=document.getElementById('planner-date').value;
+  if(!dateInput||!statements.length)return;
+
+  const latest=statements[statements.length-1];
+  const startBalance=latest.closing_balance;
+  const [yr,mo]=dateInput.split('-').map(Number);
+  const targetDate=new Date(yr,mo-1,1);
+  const now=new Date();
+  const nowMo=new Date(now.getFullYear(),now.getMonth(),1);
+
+  // Count months from now to target
+  const months=Math.round((targetDate-nowMo)/(1000*60*60*24*30.44));
+
+  const resultEl=document.getElementById('planner-result');
+  const projWrap=document.getElementById('proj-wrap');
+
+  if(months<=0){
+    resultEl.className='planner-result show impossible';
+    document.getElementById('planner-result-label').textContent='Target date is in the past';
+    document.getElementById('planner-payment').textContent='—';
+    document.getElementById('planner-result-sub').textContent='Choose a future date';
+    document.getElementById('planner-stats').innerHTML='';
+    projWrap.style.display='none';
+    return;
+  }
+
+  // Monthly interest rate (compounded from daily: (1+0.000575)^30 - 1)
+  const monthlyRate=Math.pow(1+DAILY_RATE,30)-1;
+
+  // Fixed payment formula: PMT = PV * r / (1 - (1+r)^-n)
+  // where PV = balance, r = monthly rate, n = months
+  let payment;
+  if(monthlyRate===0){
+    payment=startBalance/months;
+  } else {
+    payment=startBalance*monthlyRate/(1-Math.pow(1+monthlyRate,-months));
+  }
+
+  // Check if payment is feasible (warn if > ~3x average recent payment)
+  const recentPayments=statements.slice(-3).map(s=>s.total_payments).filter(p=>p>0);
+  const avgPayment=recentPayments.length?recentPayments.reduce((a,b)=>a+b,0)/recentPayments.length:0;
+
+  let status='feasible';
+  if(payment>avgPayment*2.5&&avgPayment>0) status='tight';
+  if(months<2) status='tight';
+
+  // Total interest over plan
+  let balance=startBalance,totalInterest=0;
+  const schedule=[];
+  const calNow=new Date(now.getFullYear(),now.getMonth(),1);
+  for(let i=0;i<months;i++){
+    const interest=balance*monthlyRate;
+    totalInterest+=interest;
+    balance=balance+interest-payment;
+    if(balance<0)balance=0;
+    const d=new Date(calNow.getFullYear(),calNow.getMonth()+i+1,1);
+    schedule.push({month:MONTHS_NAMES[d.getMonth()]+' \''+String(d.getFullYear()).slice(2),payment,interest,balance:Math.max(0,balance)});
+  }
+
+  resultEl.className=`planner-result show ${status}`;
+  document.getElementById('planner-result-label').textContent=
+    status==='feasible'?'Pay this each month':status==='tight'?'Ambitious — but possible':'Not enough time';
+  document.getElementById('planner-payment').textContent=fmt(payment);
+  document.getElementById('planner-result-sub').textContent=
+    `per month for ${months} month${months!==1?'s':''} → debt-free by ${MONTHS_NAMES[targetDate.getMonth()]} ${targetDate.getFullYear()}`;
+
+  const vsAvg=avgPayment>0?payment-avgPayment:null;
+  document.getElementById('planner-stats').innerHTML=`
+    <div class="planner-stat">Total interest: <strong>${fmt(totalInterest)}</strong></div>
+    <div class="planner-stat">Total paid out: <strong>${fmt(payment*months)}</strong></div>
+    ${vsAvg!==null?`<div class="planner-stat">vs your avg payment: <strong class="${vsAvg>0?'proj-bad':'proj-good'}">${vsAvg>0?'+':''}${fmt(vsAvg)}</strong></div>`:''}
+  `;
+
+  // Build schedule table
+  projWrap.style.display='';
+  const startBal=startBalance;
+  document.getElementById('proj-tbody').innerHTML=schedule.map(row=>{
+    const pct=Math.max(0,100-(row.balance/startBal*100));
+    const balClass=row.balance<startBal*.25?'proj-good':row.balance<startBal*.5?'proj-warn':'';
+    return`<tr>
+      <td>${row.month}</td>
+      <td>${fmt(row.payment)}</td>
+      <td class="proj-warn">${fmt(row.interest)}</td>
+      <td class="${balClass}">${row.balance<0.01?'$0.00':fmt(row.balance)}</td>
+      <td class="proj-bar-cell"><div class="proj-bar-wrap"><div class="proj-bar-fill" style="width:${pct.toFixed(1)}%"></div></div></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── CHARTS ────────────────────────────────────────────────────────────────────
 function drawBalanceLine(){
   const canvas=document.getElementById('chart-balance');
   const wrap=canvas.parentElement;
@@ -474,58 +647,26 @@ function drawBalanceLine(){
   const maxVal=Math.max(...statements.map(s=>s.closing_balance))*1.15||1;
   const xP=i=>pad.left+(n===1?cW/2:(i/(n-1))*cW);
   const yP=v=>pad.top+cH-(Math.min(v,maxVal)/maxVal)*cH;
-
-  // Grid
   ctx.strokeStyle='#E8E4DC';ctx.lineWidth=1;
-  for(let i=0;i<=3;i++){
-    const y=pad.top+(i/3)*cH;
-    ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(pad.left+cW,y);ctx.stroke();
-    ctx.fillStyle='#9A9590';ctx.font='9px Inter';ctx.textAlign='right';
-    ctx.fillText('$'+Math.round((maxVal-(i/3)*maxVal)/1000)+'k',pad.left-4,y+3);
-  }
-
-  // Active highlight
-  if(n>1){
-    const hw=Math.max(14,cW/(n-1)*.5);
-    ctx.fillStyle='rgba(196,103,58,0.09)';
-    rrect(ctx,xP(activeIdx)-hw/2,pad.top,hw,cH,3);ctx.fill();
-  }
-
-  // X labels — smart skip
+  for(let i=0;i<=3;i++){const y=pad.top+(i/3)*cH;ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(pad.left+cW,y);ctx.stroke();ctx.fillStyle='#9A9590';ctx.font='9px Inter';ctx.textAlign='right';ctx.fillText('$'+Math.round((maxVal-(i/3)*maxVal)/1000)+'k',pad.left-4,y+3)}
+  if(n>1){const hw=Math.max(14,cW/(n-1)*.5);ctx.fillStyle='rgba(196,103,58,0.09)';rrect(ctx,xP(activeIdx)-hw/2,pad.top,hw,cH,3);ctx.fill()}
   ctx.fillStyle='#9A9590';ctx.font='9px Inter';ctx.textAlign='center';
   const skip=Math.ceil(n/Math.floor(cW/30));
-  statements.forEach((st,i)=>{
-    if(i%skip!==0&&i!==n-1)return;
-    ctx.fillText(shortLabel(st),xP(i),H-3);
-  });
-
-  // Area fill
+  statements.forEach((st,i)=>{if(i%skip!==0&&i!==n-1)return;ctx.fillText(shortLabel(st),xP(i),H-3)});
   ctx.beginPath();ctx.fillStyle='rgba(196,103,58,0.07)';
   statements.forEach((s,i)=>i===0?ctx.moveTo(xP(i),yP(s.closing_balance)):ctx.lineTo(xP(i),yP(s.closing_balance)));
   ctx.lineTo(xP(n-1),pad.top+cH);ctx.lineTo(xP(0),pad.top+cH);ctx.closePath();ctx.fill();
-
-  // Line
-  ctx.beginPath();ctx.strokeStyle='#C4673A';ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.lineCap='round';ctx.setLineDash([]);
+  ctx.beginPath();ctx.strokeStyle='#C4673A';ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.lineCap='round';
   statements.forEach((s,i)=>i===0?ctx.moveTo(xP(i),yP(s.closing_balance)):ctx.lineTo(xP(i),yP(s.closing_balance)));
   ctx.stroke();
-
-  // Dots
-  statements.forEach((s,i)=>{
-    const isA=i===activeIdx;
-    dot(ctx,xP(i),yP(s.closing_balance),'#C4673A',isA?5:3,isA);
-  });
-
-  // Active value label
-  const as=statements[activeIdx];
-  const ax=xP(activeIdx),ay=yP(as.closing_balance);
+  statements.forEach((s,i)=>dot(ctx,xP(i),yP(s.closing_balance),'#C4673A',i===activeIdx?5:3,i===activeIdx));
+  const as=statements[activeIdx];const ax=xP(activeIdx),ay=yP(as.closing_balance);
   const lx=Math.min(Math.max(ax,pad.left+18),pad.left+cW-18);
   ctx.fillStyle='#C4673A';ctx.font='bold 9px Inter';ctx.textAlign='center';
   ctx.fillText(fmt(as.closing_balance),lx,Math.max(pad.top+8,ay-7));
-
   document.getElementById('trend-label').textContent=`${n} period${n!==1?'s':''}`;
 }
 
-// ── CHART 2: Grouped bars — last 6 months ────────────────────────────────────
 function drawGroupedBars(){
   const canvas=document.getElementById('chart-bars');
   const wrap=canvas.parentElement;
@@ -534,74 +675,25 @@ function drawGroupedBars(){
   canvas.width=W*dpr;canvas.height=H*dpr;
   canvas.style.width=W+'px';canvas.style.height=H+'px';
   const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,W,H);
-
-  const slice=statements.slice(-6);
-  const n=slice.length;
-  if(!n)return;
-
+  const slice=statements.slice(-6);const n=slice.length;if(!n)return;
   const pad={top:14,right:10,bottom:22,left:46};
   const cW=W-pad.left-pad.right,cH=H-pad.top-pad.bottom;
-
   const maxVal=Math.max(...slice.map(s=>Math.max(s.total_debits,s.total_payments)))*1.2||1;
   const yP=v=>pad.top+cH-(Math.min(v,maxVal)/maxVal)*cH;
-
-  // Grid
   ctx.strokeStyle='#E8E4DC';ctx.lineWidth=1;
-  for(let i=0;i<=3;i++){
-    const y=pad.top+(i/3)*cH;
-    ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(pad.left+cW,y);ctx.stroke();
-    ctx.fillStyle='#9A9590';ctx.font='9px Inter';ctx.textAlign='right';
-    ctx.fillText('$'+Math.round((maxVal-(i/3)*maxVal)/1000)+'k',pad.left-4,y+3);
-  }
-
-  const groupW=cW/n;
-  const barW=Math.min(18,groupW*.22);
-  const gap=2;
-
+  for(let i=0;i<=3;i++){const y=pad.top+(i/3)*cH;ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(pad.left+cW,y);ctx.stroke();ctx.fillStyle='#9A9590';ctx.font='9px Inter';ctx.textAlign='right';ctx.fillText('$'+Math.round((maxVal-(i/3)*maxVal)/1000)+'k',pad.left-4,y+3)}
+  const groupW=cW/n;const barW=Math.min(18,groupW*.22);const gap=2;
   slice.forEach((s,i)=>{
     const gx=pad.left+i*groupW+groupW/2;
     const isActive=statements.indexOf(s)===activeIdx;
-
-    // Subtle active bg
-    if(isActive){
-      ctx.fillStyle='rgba(196,103,58,0.07)';
-      rrect(ctx,gx-barW*1.5-gap,pad.top,barW*3+gap*2+4,cH,3);ctx.fill();
-    }
-
-    // Spent bar
-    const spentY=yP(s.total_debits),baseY=pad.top+cH;
-    ctx.fillStyle=isActive?'#C4673A':'rgba(196,103,58,0.55)';
-    rrectTop(ctx,gx-barW*1.5-gap,spentY,barW,baseY-spentY,3);ctx.fill();
-
-    // Paid bar
-    const paidY=yP(s.total_payments);
-    ctx.fillStyle=isActive?'#2D6A4F':'rgba(45,106,79,0.55)';
-    rrectTop(ctx,gx-barW/2,paidY,barW,baseY-paidY,3);ctx.fill();
-
-    // Interest bar (scaled ×5 for visibility)
-    const intScaled=s.interest*5;
-    const intY=yP(intScaled);
-    ctx.fillStyle=isActive?'#B07D2A':'rgba(176,125,42,0.55)';
-    rrectTop(ctx,gx+barW/2+gap,intY,barW,baseY-intY,3);ctx.fill();
-
-    // X label
-    ctx.fillStyle=isActive?'#1A1916':'#9A9590';
-    ctx.font=isActive?'bold 9px Inter':'9px Inter';
-    ctx.textAlign='center';
-    ctx.fillText(shortLabel(s),gx,H-3);
+    if(isActive){ctx.fillStyle='rgba(196,103,58,0.07)';rrect(ctx,gx-barW*1.5-gap,pad.top,barW*3+gap*2+4,cH,3);ctx.fill()}
+    const baseY=pad.top+cH;
+    ctx.fillStyle=isActive?'#C4673A':'rgba(196,103,58,0.55)';rrectTop(ctx,gx-barW*1.5-gap,yP(s.total_debits),barW,baseY-yP(s.total_debits),3);ctx.fill();
+    ctx.fillStyle=isActive?'#2D6A4F':'rgba(45,106,79,0.55)';rrectTop(ctx,gx-barW/2,yP(s.total_payments),barW,baseY-yP(s.total_payments),3);ctx.fill();
+    const intScaled=s.interest*5;ctx.fillStyle=isActive?'#B07D2A':'rgba(176,125,42,0.55)';rrectTop(ctx,gx+barW/2+gap,yP(intScaled),barW,baseY-yP(intScaled),3);ctx.fill();
+    ctx.fillStyle=isActive?'#1A1916':'#9A9590';ctx.font=isActive?'bold 9px Inter':'9px Inter';ctx.textAlign='center';ctx.fillText(shortLabel(s),gx,H-3);
   });
-
-  // Active period — interest actual value label above bar
-  const as=slice[slice.length-1-(slice.length-1-(statements.indexOf(statements[activeIdx])-( statements.length-slice.length)))];
-  const activeInSlice=slice.findIndex(s=>statements.indexOf(s)===activeIdx);
-  if(activeInSlice>=0){
-    const s=slice[activeInSlice];
-    const gx=pad.left+activeInSlice*groupW+groupW/2;
-    ctx.fillStyle='#B07D2A';ctx.font='bold 8px Inter';ctx.textAlign='center';
-    ctx.fillText(fmt(s.interest),gx+barW,Math.max(pad.top+8,yP(s.interest*5)-4));
-  }
-
-  document.getElementById('bar-label').textContent=`Interest bar ×5 for scale`;
+  document.getElementById('bar-label').textContent='Interest ×5 for scale';
 }
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
@@ -611,19 +703,13 @@ function renderTxTable(txs,query){
   document.getElementById('tx-tbody').innerHTML=f.map(t=>`<tr><td>${t.date}</td><td>${t.merchant}</td><td><span class="cat-tag">${t.category}</span></td><td style="text-align:right;font-variant-numeric:tabular-nums">${fmt(t.amount)}</td></tr>`).join('');
 }
 function filterTx(){if(!statements.length)return;renderTxTable(statements[activeIdx].transactions,document.getElementById('tx-search').value)}
-
 function dot(ctx,x,y,color,r,filled){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=filled?color:'#fff';ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.fill();ctx.stroke()}
 function rrect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath()}
-function rrectTop(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h);ctx.lineTo(x,y+h);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath()}
-
+function rrectTop(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h);ctx.lineTo(x,y+h);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(ctx,y,x+r,y);ctx.closePath()}
 function switchPeriod(val){activeIdx=parseInt(val);render()}
 function fmt(n){if(n==null)return'—';return'$'+Number(n).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}
 function fmtDate(str){if(!str)return'';const d=new Date(str+'T00:00:00');return d.toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'})}
-function renderDelta(id,curr,prev,higherIsBad){
-  const el=document.getElementById(id);if(!el||prev==null)return;
-  const diff=curr-prev,up=diff>0,bad=higherIsBad?up:!up,pct=prev?Math.abs(diff/prev*100).toFixed(0):0;
-  el.innerHTML=`<span class="kpi-delta ${bad?'delta-up':'delta-dn'}">${up?'▲':'▼'} ${fmt(Math.abs(diff))} (${pct}%)</span>`;
-}
+function renderDelta(id,curr,prev,higherIsBad){const el=document.getElementById(id);if(!el||prev==null)return;const diff=curr-prev,up=diff>0,bad=higherIsBad?up:!up,pct=prev?Math.abs(diff/prev*100).toFixed(0):0;el.innerHTML=`<span class="kpi-delta ${bad?'delta-up':'delta-dn'}">${up?'▲':'▼'} ${fmt(Math.abs(diff))} (${pct}%)</span>`}
 function setProc(active,msg){document.getElementById('processing').classList.toggle('active',active);document.getElementById('upload-section').classList.toggle('hidden',active);if(msg)document.getElementById('proc-sub').textContent=msg}
 function showError(msg){const el=document.getElementById('error-msg');el.textContent='⚠ '+msg;el.classList.add('active')}
 function hideError(){document.getElementById('error-msg').classList.remove('active')}
