@@ -26,6 +26,11 @@ const app = initializeApp({
 const auth = getAuth(app);
 const db   = getFirestore(app);
 
+// Handle redirect result on page load
+getRedirectResult(auth).catch(err=>{
+  if(err.code!=='auth/popup-closed-by-user')
+    document.getElementById('auth-err').textContent='Sign-in failed: '+err.message;
+
 // ── GLOBALS ────────────────────────────────────────────────────────────────
 const MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DAY_NAMES=['MON','TUE','WED','THU','FRI','SAT','SUN'];
@@ -48,7 +53,6 @@ let upData={accounts:[],transactions:[]};
 
 // ── AUTH STATE ─────────────────────────────────────────────────────────────
 onAuthStateChanged(auth, async user => {
-  try{const result=await getRedirectResult(auth);if(result?.user)return;}catch(e){}
   if(user){
     currentUser=user;
     showApp();
