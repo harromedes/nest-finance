@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+CiAgPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iOCIgZmlsbD0iIzYzNTVEOCIvPgogIDxwb2x5Z29uIHBvaW50cz0iMTYsNiAyOCwxNyA0LDE3IiBmaWxsPSJ3aGl0ZSIgb3BhY2l0eT0iMC45NSIvPgogIDxyZWN0IHg9IjIwIiB5PSI4IiB3aWR0aD0iMyIgaGVpZ2h0PSI1IiBmaWxsPSJ3aGl0ZSIgb3BhY2l0eT0iMC45NSIvPgogIDxyZWN0IHg9IjciIHk9IjE3IiB3aWR0aD0iMTgiIGhlaWdodD0iMTEiIHJ4PSIxIiBmaWxsPSJ3aGl0ZSIgb3BhY2l0eT0iMC45NSIvPgogIDxyZWN0IHg9IjEzIiB5PSIyMSIgd2lkdGg9IjYiIGhlaWdodD0iNyIgcng9IjEuNSIgZmlsbD0iIzYzNTVEOCIvPgo8L3N2Zz4=">
 <title>Nest — Finance</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet">
 <!-- Firebase SDK -->
@@ -35,13 +36,12 @@ let currentUser=null;
 let scriptURL='';
 let scriptSecret='';
 let upToken='';
-let upBudget=0;
-let upCatBudgets={};
-let budgetEditOpen=false;
 let currentTab='anz';
-let weekOffset=0;
 const cc={anz:{statements:[],activeIdx:0},wbc:{statements:[],activeIdx:0}};
 let upData={accounts:[],transactions:[]};
+let upViewCycleOffset=0; // 0 = current, -1 = prev, etc.
+let upActiveWeek=0;      // 0-3, week index within viewed cycle
+let upSelectedDay=null;  // {weekIdx, dayIdx} or null
 
 // ── AUTH STATE ─────────────────────────────────────────────────────────────
 onAuthStateChanged(auth, async user => {
@@ -104,8 +104,6 @@ async function loadSettings(){
       scriptURL=d.scriptURL||'';
       scriptSecret=d.scriptSecret||'';
       upToken=d.upToken||'';
-      upBudget=d.upBudget||0;
-      upCatBudgets=d.upCatBudgets||{};
       if(scriptURL) document.getElementById('script-url').value=scriptURL;
       if(scriptSecret) document.getElementById('script-secret').value=scriptSecret;
       if(upToken) document.getElementById('up-token').value=upToken;
@@ -126,7 +124,7 @@ function setUpTokenStatus(state,msg){
 }
 
 async function saveSettings(){
-  await setDoc(settingsDoc(),{scriptURL,scriptSecret,upToken,upBudget,upCatBudgets},{merge:true});
+  await setDoc(settingsDoc(),{scriptURL,scriptSecret,upToken},{merge:true});
 }
 
 async function loadAllStatements(){
@@ -321,7 +319,7 @@ function drawBalanceLine(canvasId,stmts,activeIdx,accentCol,accentPale){
   const W=wrap.offsetWidth||420,H=130;
   canvas.width=W*dpr;canvas.height=H*dpr;canvas.style.width=W+'px';canvas.style.height=H+'px';
   const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,W,H);
-  const n=stmts.length,pad={t:16,r:60,b:22,l:42};
+  const n=stmts.length,pad={t:16,r:12,b:22,l:42};
   const cW=W-pad.l-pad.r,cH=H-pad.t-pad.b;
   const maxV=Math.max(...stmts.map(s=>s.closing_balance))*1.18||1;
   const xP=i=>pad.l+(n===1?cW/2:(i/(n-1))*cW);
@@ -338,7 +336,7 @@ function drawBalanceLine(canvasId,stmts,activeIdx,accentCol,accentPale){
   ctx.beginPath();ctx.strokeStyle=accentCol;ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.lineCap='round';
   stmts.forEach((s,i)=>i===0?ctx.moveTo(xP(i),yP(s.closing_balance)):ctx.lineTo(xP(i),yP(s.closing_balance)));ctx.stroke();
   stmts.forEach((s,i)=>drawDot(ctx,xP(i),yP(s.closing_balance),accentCol,i===activeIdx?5:3,i===activeIdx));
-  const as=stmts[activeIdx];const lx=Math.min(Math.max(xP(activeIdx),pad.l+18),pad.l+cW-50);
+  const as=stmts[activeIdx];const lx=Math.min(Math.max(xP(activeIdx),pad.l+18),pad.l+cW-18);
   ctx.fillStyle=accentCol;ctx.font='bold 9px DM Sans';ctx.textAlign='center';
   ctx.fillText(fmt(as.closing_balance),lx,Math.max(pad.t+8,yP(as.closing_balance)-7));
 }
@@ -451,6 +449,7 @@ async function upFetch(url){
   return await r.json();
 }
 
+// ── UP CYCLE HELPERS ───────────────────────────────────────────────────────
 function getCycle(date){
   const d=date||new Date();let start,end;
   if(d.getDate()>=CYCLE_DAY){start=new Date(d.getFullYear(),d.getMonth(),CYCLE_DAY);end=new Date(d.getFullYear(),d.getMonth()+1,CYCLE_DAY-1,23,59,59)}
@@ -458,79 +457,143 @@ function getCycle(date){
   return{start,end};
 }
 
-function getWeekWindow(offset){
+// Returns the cycle for upViewCycleOffset (0=current, -1=prev, etc)
+function getViewedCycle(){
   const now=new Date();
-  const dow=now.getDay()===0?6:now.getDay()-1;
-  const monday=new Date(now);monday.setDate(now.getDate()-dow+(offset*7));monday.setHours(0,0,0,0);
-  const sunday=new Date(monday);sunday.setDate(monday.getDate()+6);sunday.setHours(23,59,59,999);
-  return{start:monday,end:sunday};
+  const current=getCycle(now);
+  if(upViewCycleOffset===0) return current;
+  let ref=new Date(current.start.getTime()-86400000);
+  for(let i=0;i<Math.abs(upViewCycleOffset)-1;i++) ref=new Date(getCycle(ref).start.getTime()-86400000);
+  return getCycle(ref);
 }
 
+// Get all cycles that have any transaction data, as far back as history goes
+function getAllCycles(){
+  const spendTx=upData.transactions.filter(t=>parseFloat(t.attributes.amount.value)<0);
+  if(!spendTx.length) return [getCycle(new Date())];
+  const earliest=new Date(Math.min(...spendTx.map(t=>new Date(t.attributes.createdAt))));
+  const cycles=[];
+  let ref=new Date();
+  let c=getCycle(ref);
+  while(c.start>=earliest||cycles.length===0){
+    cycles.push(c);
+    ref=new Date(c.start.getTime()-86400000);
+    c=getCycle(ref);
+    if(cycles.length>60) break; // safety cap ~5yrs
+  }
+  return cycles; // index 0 = current, index n = oldest
+}
+
+// Returns the 4 Mon-Sun weeks that cover the cycle
+function getCycleWeeks(cycle){
+  const weeks=[];
+  // Find the Monday of the week containing cycle.start
+  const dow=cycle.start.getDay()===0?6:cycle.start.getDay()-1;
+  const firstMon=new Date(cycle.start);firstMon.setDate(cycle.start.getDate()-dow);firstMon.setHours(0,0,0,0);
+  for(let i=0;i<4;i++){
+    const mon=new Date(firstMon);mon.setDate(firstMon.getDate()+i*7);
+    const sun=new Date(mon);sun.setDate(mon.getDate()+6);sun.setHours(23,59,59,999);
+    weeks.push({start:mon,end:sun});
+  }
+  return weeks;
+}
+
+// Get previous cycle's total spend as the budget reference
+function getPrevCycleBudget(){
+  const now=new Date();
+  const current=getCycle(now);
+  const prevRef=new Date(current.start.getTime()-86400000);
+  const prev=getCycle(prevRef);
+  const spendTx=upData.transactions.filter(t=>parseFloat(t.attributes.amount.value)<0&&t.attributes.isCategorizable!==false);
+  const prevTx=spendTx.filter(t=>{const d=new Date(t.attributes.createdAt);return d>=prev.start&&d<=prev.end});
+  return prevTx.reduce((s,t)=>s+Math.abs(parseFloat(t.attributes.amount.value)),0);
+}
+
+// ── UP DASHBOARD ───────────────────────────────────────────────────────────
 function renderUpDashboard(){
   document.getElementById('up-dashboard').style.display='block';
+  const allCycles=getAllCycles();
+  const totalCycles=allCycles.length;
+  const cycle=getViewedCycle();
   const now=new Date();
-  const cycle=getCycle(now);
-  const prevEnd=new Date(cycle.start.getTime()-86400000);
-  const prevCycle=getCycle(prevEnd);
-  const totalDays=Math.round((cycle.end-cycle.start)/86400000)+1;
-  const daysSoFar=Math.min(Math.round((now-cycle.start)/86400000)+1,totalDays);
-  const pct=Math.min(100,daysSoFar/totalDays*100);
+  const isCurrentCycle=upViewCycleOffset===0;
 
-  set('up-eyebrow','Pay cycle · '+MN[cycle.start.getMonth()]+' '+cycle.start.getDate()+' – '+MN[cycle.end.getMonth()]+' '+cycle.end.getDate());
+  // Cycle nav
+  const cycleLabel=MN[cycle.start.getMonth()]+' '+cycle.start.getDate()+' – '+MN[cycle.end.getMonth()]+' '+cycle.end.getDate();
+  set('up-cycle-label',cycleLabel);
+  document.getElementById('up-cycle-prev').disabled=Math.abs(upViewCycleOffset)>=totalCycles-1;
+  document.getElementById('up-cycle-next').disabled=upViewCycleOffset>=0;
+
+  // Spending data for this cycle
+  const spendTx=upData.transactions.filter(t=>parseFloat(t.attributes.amount.value)<0&&t.attributes.isCategorizable!==false);
+  const cycleTx=spendTx.filter(t=>{const d=new Date(t.attributes.createdAt);return d>=cycle.start&&d<=cycle.end});
+  const cycleSpent=cycleTx.reduce((s,t)=>s+Math.abs(parseFloat(t.attributes.amount.value)),0);
+
+  // Budget = prev cycle's total spend (read-only reference)
+  const refBudget=getPrevCycleBudget();
+
+  // Hero stats
+  const totalDays=Math.round((cycle.end-cycle.start)/86400000)+1;
+  const cutoff=isCurrentCycle?Math.min(now,cycle.end):cycle.end;
+  const daysSoFar=Math.min(Math.round((cutoff-cycle.start)/86400000)+1,totalDays);
+  const pct=Math.min(100,daysSoFar/totalDays*100);
+  const remaining=refBudget?Math.max(0,refBudget-cycleSpent):null;
+  const dailyAvg=daysSoFar>0?cycleSpent/daysSoFar:0;
+  const projected=dailyAvg*totalDays;
+
+  set('up-eyebrow',(isCurrentCycle?'Current':'Past')+' pay cycle');
+  set('up-remaining',remaining!==null?fmt(remaining):'—');
+  document.getElementById('up-remaining-lbl').textContent=isCurrentCycle?'left to spend this cycle':'spent this cycle';
+  if(!isCurrentCycle) set('up-remaining',fmt(cycleSpent));
   set('up-prog-start',MN[cycle.start.getMonth()]+' '+cycle.start.getDate());
   set('up-prog-mid','Day '+daysSoFar+' of '+totalDays);
   set('up-prog-end',MN[cycle.end.getMonth()]+' '+cycle.end.getDate());
   document.getElementById('up-prog-fill').style.width=pct+'%';
 
-  const spendTx=upData.transactions.filter(t=>parseFloat(t.attributes.amount.value)<0&&t.attributes.isCategorizable!==false);
-  const cycleTx=spendTx.filter(t=>{const d=new Date(t.attributes.createdAt);return d>=cycle.start&&d<=cycle.end});
-  const prevCycleTx=spendTx.filter(t=>{const d=new Date(t.attributes.createdAt);return d>=prevCycle.start&&d<=prevCycle.end});
-  const cycleSpent=cycleTx.reduce((s,t)=>s+Math.abs(parseFloat(t.attributes.amount.value)),0);
-  const prevSpent=prevCycleTx.reduce((s,t)=>s+Math.abs(parseFloat(t.attributes.amount.value)),0);
-
-  const autoTx=upData.transactions.filter(t=>{
-    const d=new Date(t.attributes.createdAt);const amt=parseFloat(t.attributes.amount.value);
-    return amt>0&&d>=cycle.start&&d<=new Date(cycle.start.getTime()+86400000*3)&&(t.attributes.description||'').toLowerCase().includes('transfer');
-  });
-  const autoB=autoTx.reduce((s,t)=>s+parseFloat(t.attributes.amount.value),0);
-  const effectiveB=upBudget||(autoB>0?autoB:0);
-  const remaining=effectiveB?Math.max(0,effectiveB-cycleSpent):null;
-
-  set('up-remaining',remaining!==null?fmt(remaining):'—');
-  document.getElementById('budget-detected').style.display=(!upBudget&&autoB)?'inline':'none';
-  document.getElementById('budget-val-display').textContent=effectiveB?fmt(effectiveB):'Not set';
-  document.getElementById('budget-val-input').value=effectiveB||'';
-
-  const dailyAvg=daysSoFar>0?cycleSpent/daysSoFar:0;
-  const projected=dailyAvg*totalDays;
-  const budgetProg=effectiveB?cycleSpent/effectiveB:null;
+  // Chips
+  const budgetProg=refBudget?cycleSpent/refBudget:null;
   const chips=[];
-  if(effectiveB){const diff=(budgetProg||0)-pct/100;chips.push(`<div class="up-chip ${diff>0.1?'bad':diff<-0.1?'good':'neutral'}">${diff>0.1?'⚠ Ahead of pace':diff<-0.1?'✓ Under pace':'➔ On pace'}</div>`);}
-  chips.push(`<div class="up-chip neutral">${effectiveB?fmt(effectiveB)+' budget':'No budget set'}</div>`);
-  chips.push(`<div class="up-chip neutral">${totalDays-daysSoFar} days left</div>`);
+  if(refBudget){const diff=(budgetProg||0)-pct/100;chips.push(`<div class="up-chip ${diff>0.1?'bad':diff<-0.1?'good':'neutral'}">${diff>0.1?'⚠ Ahead of pace':diff<-0.1?'✓ Under pace':'➔ On pace'}</div>`);}
+  chips.push(`<div class="up-chip neutral">${refBudget?fmt(refBudget)+' ref budget':'No ref budget'}</div>`);
+  if(isCurrentCycle) chips.push(`<div class="up-chip neutral">${totalDays-daysSoFar} days left</div>`);
   document.getElementById('up-chips').innerHTML=chips.join('');
 
+  // Pace banner
   const pb=document.getElementById('up-pace');
-  if(effectiveB&&budgetProg!==null){
+  if(refBudget&&budgetProg!==null&&isCurrentCycle){
     const diff=budgetProg-pct/100;
-    if(diff>0.1){pb.className='pace-banner bad';set('up-pace-icon','⚠');set('up-pace-hl','Spending ahead of pace');set('up-pace-detail',Math.round(pct)+'% through cycle, '+Math.round(budgetProg*100)+'% of budget used. Projected '+fmt(projected)+' — '+fmt(projected-effectiveB)+' over.');set('up-pace-badge',fmt(cycleSpent))}
-    else if(diff<-0.1){pb.className='pace-banner good';set('up-pace-icon','✓');set('up-pace-hl','Tracking under budget');set('up-pace-detail',Math.round(pct)+'% through cycle, '+Math.round(budgetProg*100)+'% of budget used — projected '+fmt(projected)+', '+fmt(effectiveB-projected)+' under.');set('up-pace-badge',fmt(remaining))}
+    if(diff>0.1){pb.className='pace-banner bad';set('up-pace-icon','⚠');set('up-pace-hl','Spending ahead of pace');set('up-pace-detail',Math.round(pct)+'% through cycle, '+Math.round(budgetProg*100)+'% of budget used. Projected '+fmt(projected)+' — '+fmt(projected-refBudget)+' over.');set('up-pace-badge',fmt(cycleSpent))}
+    else if(diff<-0.1){pb.className='pace-banner good';set('up-pace-icon','✓');set('up-pace-hl','Tracking under budget');set('up-pace-detail',Math.round(pct)+'% through cycle, '+Math.round(budgetProg*100)+'% of budget used — projected '+fmt(projected)+', '+fmt(refBudget-projected)+' under.');set('up-pace-badge',fmt(remaining))}
     else{pb.className='pace-banner warn';set('up-pace-icon','➔');set('up-pace-hl','On pace');set('up-pace-detail',Math.round(pct)+'% through cycle, '+Math.round(budgetProg*100)+'% of budget used.');set('up-pace-badge',fmt(cycleSpent))}
+  }else if(!isCurrentCycle){
+    const under=refBudget?refBudget-cycleSpent:null;
+    pb.className='pace-banner '+(under===null?'warn':under>=0?'good':'bad');
+    set('up-pace-icon',under===null?'📋':under>=0?'✓':'⚠');
+    set('up-pace-hl',under===null?fmt(cycleSpent)+' spent this cycle':under>=0?fmt(under)+' under budget':fmt(Math.abs(under))+' over budget');
+    set('up-pace-detail',refBudget?'Reference: '+fmt(refBudget)+' (prev cycle)':'No reference budget available');
+    set('up-pace-badge',fmt(cycleSpent));
   }else{
-    pb.className='pace-banner warn';set('up-pace-icon','💡');set('up-pace-hl','Day '+daysSoFar+' of '+totalDays+' — '+fmt(cycleSpent)+' spent');set('up-pace-detail','Set a budget to track pace. Last cycle: '+fmt(prevSpent));set('up-pace-badge',fmt(dailyAvg)+'/day');
+    pb.className='pace-banner warn';set('up-pace-icon','💡');set('up-pace-hl','Day '+daysSoFar+' of '+totalDays+' — '+fmt(cycleSpent)+' spent');set('up-pace-detail','Based on last cycle spend of '+fmt(refBudget));set('up-pace-badge',fmt(dailyAvg)+'/day');
   }
 
-  set('up-k-spent',fmt(cycleSpent));set('up-k-spent-sub',prevSpent?'vs '+fmt(prevSpent)+' last cycle':'');
+  // KPIs
+  set('up-k-spent',fmt(cycleSpent));set('up-k-spent-sub',refBudget?'ref: '+fmt(refBudget):'');
   set('up-k-daily',fmt(dailyAvg));set('up-k-daily-sub','over '+daysSoFar+' day'+(daysSoFar!==1?'s':''));
-  set('up-k-proj',fmt(projected));set('up-k-proj-sub',effectiveB?(projected>effectiveB?'▲ '+fmt(projected-effectiveB)+' over':'▼ '+fmt(effectiveB-projected)+' under'):'');
-  set('up-k-days',String(totalDays-daysSoFar));set('up-k-days-sub',effectiveB?fmt((effectiveB-cycleSpent)/Math.max(1,totalDays-daysSoFar))+'/day remaining':'');
+  set('up-k-proj',isCurrentCycle?fmt(projected):'—');set('up-k-proj-sub',isCurrentCycle&&refBudget?(projected>refBudget?'▲ '+fmt(projected-refBudget)+' over':'▼ '+fmt(refBudget-projected)+' under'):'');
+  set('up-k-days',isCurrentCycle?String(totalDays-daysSoFar):String(totalDays));set('up-k-days-sub',isCurrentCycle?'days remaining':'day cycle');
 
-  document.getElementById('up-acct-cards').innerHTML=upData.accounts.map(a=>{
-    const bal=parseFloat(a.attributes.balance.value);
-    const isSav=a.attributes.accountType==='SAVER';const is2Up=a.attributes.ownershipType==='JOINT';
-    return`<div class="acct-card"><div class="acct-type">${isSav?'Saver':is2Up?'2Up':'Spending'}</div><div class="acct-name">${a.attributes.displayName}</div><div class="acct-bal ${isSav?'save':is2Up?'joint':'spend'}">${fmt(bal)}</div></div>`;
-  }).join('');
+  // Accounts (only show on current cycle)
+  const acctEl=document.getElementById('up-acct-cards');
+  if(isCurrentCycle){
+    acctEl.style.display='flex';
+    acctEl.innerHTML=upData.accounts.map(a=>{
+      const bal=parseFloat(a.attributes.balance.value);
+      const isSav=a.attributes.accountType==='SAVER';const is2Up=a.attributes.ownershipType==='JOINT';
+      return`<div class="acct-card"><div class="acct-type">${isSav?'Saver':is2Up?'2Up':'Spending'}</div><div class="acct-name">${a.attributes.displayName}</div><div class="acct-bal ${isSav?'save':is2Up?'joint':'spend'}">${fmt(bal)}</div></div>`;
+    }).join('');
+  }else{acctEl.style.display='none';}
 
+  // Category bars
   const cats={};
   cycleTx.forEach(t=>{
     const raw=t.relationships&&t.relationships.category&&t.relationships.category.data?t.relationships.category.data.id:'other';
@@ -539,142 +602,161 @@ function renderUpDashboard(){
   });
   const sortedCats=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
   const maxCat=sortedCats[0]?.[1]||1;
-  document.getElementById('up-cat-bars').innerHTML=sortedCats.map(([cat,amt],i)=>{
-    const budget=upCatBudgets[cat]||0;const isOver=budget>0&&amt>budget;
-    const rem=budget>0?budget-amt:null;
-    const label=rem!==null?(rem<0?fmt(Math.abs(rem))+' over':fmt(rem)+' left'):fmt(amt);
-    const cls=rem!==null?(rem<0?'over':rem<budget*.2?'low':'ok'):'';
-    return`<div class="cat-remain-row"><div class="cat-remain-name" title="${cat}">${cat}</div><div class="cat-remain-track"><div class="cat-remain-fill" style="width:${(amt/maxCat*100).toFixed(1)}%;background:${isOver?'var(--bad)':CAT_COLORS[i%CAT_COLORS.length]}"></div></div><div class="cat-remain-val ${cls}">${label}</div></div>`;
-  }).join('');
+  document.getElementById('up-cat-bars').innerHTML=sortedCats.length?sortedCats.map(([cat,amt],i)=>{
+    return`<div class="cat-remain-row"><div class="cat-remain-name" title="${cat}">${cat}</div><div class="cat-remain-track"><div class="cat-remain-fill" style="width:${(amt/maxCat*100).toFixed(1)}%;background:${CAT_COLORS[i%CAT_COLORS.length]}"></div></div><div class="cat-remain-val">${fmt(amt)}</div></div>`;
+  }).join(''):'<div style="font-size:11px;color:var(--muted)">No spend data for this cycle</div>';
 
-  buildBudgetEditor(sortedCats);
-  renderWeek();
-  renderPrevCycles(spendTx,cycle);
-  renderUpTx('');
+  // Week view & transactions
+  upSelectedDay=null;
+  renderCycleWeeks(cycle,cycleTx);
+  renderCycleTx(cycleTx);
 }
 
-function renderWeek(){
-  const week=getWeekWindow(weekOffset);
-  const now=new Date();
-  const isCurrentWeek=weekOffset===0;
-  const isFutureWeek=weekOffset>0;
-  const spendTx=upData.transactions.filter(t=>parseFloat(t.attributes.amount.value)<0&&t.attributes.isCategorizable!==false);
-  const weekTx=spendTx.filter(t=>{const d=new Date(t.attributes.createdAt);return d>=week.start&&d<=week.end});
-  const weekSpent=weekTx.reduce((s,t)=>s+Math.abs(parseFloat(t.attributes.amount.value)),0);
-  const cycle=getCycle(now);
-  const totalDays=Math.round((cycle.end-cycle.start)/86400000)+1;
-  const daysSoFar=Math.min(Math.round((now-cycle.start)/86400000)+1,totalDays);
-  const cycleTx=spendTx.filter(t=>{const d=new Date(t.attributes.createdAt);return d>=cycle.start&&d<=new Date()});
-  const cycleSpent=cycleTx.reduce((s,t)=>s+Math.abs(parseFloat(t.attributes.amount.value)),0);
-  const daysLeft=Math.max(1,totalDays-daysSoFar);
-  const dailySuggested=upBudget?Math.max(0,(upBudget-cycleSpent)/daysLeft):0;
-  const days=[0,1,2,3,4,5,6];
-  const daySpend=days.map(d=>{
-    const dayStart=new Date(week.start);dayStart.setDate(week.start.getDate()+d);dayStart.setHours(0,0,0,0);
-    const dayEnd=new Date(dayStart);dayEnd.setHours(23,59,59,999);
-    return weekTx.filter(t=>{const dt=new Date(t.attributes.createdAt);return dt>=dayStart&&dt<=dayEnd}).reduce((s,t)=>s+Math.abs(parseFloat(t.attributes.amount.value)),0);
-  });
-  const maxDay=Math.max(...daySpend,dailySuggested*1.2,1);
-  const daysLeftInWeek=isCurrentWeek?Math.max(0,6-(now.getDay()===0?6:now.getDay()-1)):isFutureWeek?7:0;
-  const weekRemaining=isCurrentWeek?Math.max(0,dailySuggested*daysLeftInWeek):null;
-  const startLabel=week.start.getDate()+' '+MN[week.start.getMonth()];
-  const endLabel=week.end.getDate()+' '+MN[week.end.getMonth()];
-  set('week-date-badge',startLabel+' – '+endLabel);
-  set('week-nav-label',weekOffset===0?'This week':weekOffset===-1?'Last week':MN[week.start.getMonth()]+' '+week.start.getDate());
-  set('week-remain',weekRemaining!==null?fmt(weekRemaining):fmt(weekSpent)+' spent');
-  document.querySelector('.week-remain-lbl').textContent=weekRemaining!==null?'left to spend':'total spent';
-  set('week-daily',dailySuggested?fmt(dailySuggested)+' / day':'—');
-  const weekBudget=dailySuggested*7;
-  const prog=weekBudget>0?Math.min(100,weekSpent/weekBudget*100):0;
-  document.getElementById('week-prog').style.width=prog+'%';
-  const todayDow=now.getDay()===0?6:now.getDay()-1;
-  document.getElementById('week-days').innerHTML=days.map(d=>{
-    const isToday=isCurrentWeek&&d===todayDow;
-    const isFuture=isCurrentWeek&&d>todayDow||isFutureWeek;
-    const h=daySpend[d]>0?Math.max(8,(daySpend[d]/maxDay)*100):0;
-    return`<div class="week-day${isToday?' is-today':''}${isFuture?' future':''}"><div class="day-lbl">${DAY_NAMES[d]}</div><div class="day-bar-wrap"><div class="day-bar" style="height:${h}%"></div></div><div class="day-amt">${daySpend[d]>0?'$'+Math.round(daySpend[d]):'—'}</div></div>`;
-  }).join('');
-  document.getElementById('week-prev-btn').disabled=false;
-  document.getElementById('week-next-btn').disabled=weekOffset>=0;
-}
-
-window.navWeek=function(dir){weekOffset=Math.min(0,weekOffset+dir);renderWeek()};
-
-function renderPrevCycles(spendTx,currentCycle){
-  const cycles=[];
-  let refDate=new Date(currentCycle.start.getTime()-86400000);
-  for(let i=0;i<3;i++){
-    const c=getCycle(refDate);
-    const tx=spendTx.filter(t=>{const d=new Date(t.attributes.createdAt);return d>=c.start&&d<=c.end});
-    const spent=tx.reduce((s,t)=>s+Math.abs(parseFloat(t.attributes.amount.value)),0);
-    cycles.push({cycle:c,spent});
-    refDate=new Date(c.start.getTime()-86400000);
-  }
-  document.getElementById('up-prev-cycles').innerHTML=cycles.map(({cycle:c,spent})=>{
-    const delta=upBudget?upBudget-spent:null;
-    const isUnder=delta===null?null:delta>=0;
-    const pct=upBudget?Math.min(100,spent/upBudget*100):70;
-    const label=`${MN[c.start.getMonth()]} ${c.start.getDate()} – ${MN[c.end.getMonth()]} ${c.end.getDate()}`;
-    const sub=upBudget?fmt(spent)+' of '+fmt(upBudget)+' budget':fmt(spent)+' spent';
-    const deltaLabel=delta!==null?(isUnder?fmt(delta)+' under':fmt(Math.abs(delta))+' over'):fmt(spent)+' spent';
-    return`<div class="cycle-hist-row"><div style="flex:1;min-width:0"><div class="cycle-hist-dates">${label}</div><div class="cycle-hist-sub">${sub}</div></div><div class="cycle-hist-right"><div class="cycle-hist-delta ${delta===null?'':isUnder?'under':'over'}">${deltaLabel}</div><div class="cycle-hist-bar"><div class="cycle-hist-fill" style="width:${pct.toFixed(0)}%;background:${delta===null?'var(--muted)':isUnder?'var(--good)':'var(--bad)'}"></div></div></div><div class="cycle-chevron">›</div></div>`;
-  }).join('');
-}
-
-function buildBudgetEditor(cats){
-  document.getElementById('budget-cat-rows').innerHTML=cats.map(([cat])=>`
-    <div class="budget-cat-row"><span class="budget-cat-name">${cat}</span>
-    <input type="number" class="budget-cat-input" placeholder="No limit" value="${upCatBudgets[cat]||''}"
-      oninput="onCatBudget('${cat.replace(/'/g,"\\'")}',this.value)" min="0"></div>`).join('');
-  updateAllocTotal();
-}
-
-window.onCatBudget=async function(cat,val){
-  if(val&&parseFloat(val)>0)upCatBudgets[cat]=parseFloat(val);else delete upCatBudgets[cat];
-  await saveSettings();
-  updateAllocTotal();renderUpDashboard();
-};
-
-function updateAllocTotal(){
-  const total=Object.values(upCatBudgets).reduce((s,v)=>s+(parseFloat(v)||0),0);
-  const el=document.getElementById('budget-alloc-val');
-  el.textContent=fmt(total);el.className='budget-alloc-val'+(upBudget&&total>upBudget?' over':'');
-}
-
-window.onBudgetChange=async function(){
-  const v=parseFloat(document.getElementById('budget-val-input').value);
-  upBudget=isNaN(v)?0:v;
-  await saveSettings();
+window.navUpCycle=function(dir){
+  const allCycles=getAllCycles();
+  upViewCycleOffset=Math.max(-(allCycles.length-1),Math.min(0,upViewCycleOffset+dir));
+  upActiveWeek=0;
+  upSelectedDay=null;
   renderUpDashboard();
 };
 
-window.toggleBudgetEdit=function(){
-  budgetEditOpen=!budgetEditOpen;
-  set('budget-edit-btn',budgetEditOpen?'Done':'Edit');
-  document.getElementById('budget-val-input').style.display=budgetEditOpen?'inline-block':'none';
-  document.getElementById('budget-val-display').style.display=budgetEditOpen?'none':'inline';
-  document.getElementById('budget-cats').style.display=budgetEditOpen?'block':'none';
+// ── CYCLE WEEK VIEW ────────────────────────────────────────────────────────
+function renderCycleWeeks(cycle,cycleTx){
+  const weeks=getCycleWeeks(cycle);
+  const now=new Date();
+  const isCurrentCycle=upViewCycleOffset===0;
+
+  // Week tabs
+  document.getElementById('up-week-tabs').innerHTML=weeks.map((w,i)=>`
+    <button class="week-tab${i===upActiveWeek?' active':''}" onclick="selectUpWeek(${i})">W${i+1}</button>`).join('');
+
+  renderWeekBars(weeks[upActiveWeek],cycleTx,cycle,isCurrentCycle,now);
+}
+
+window.selectUpWeek=function(idx){
+  upActiveWeek=idx;
+  upSelectedDay=null;
+  const cycle=getViewedCycle();
+  const spendTx=upData.transactions.filter(t=>parseFloat(t.attributes.amount.value)<0&&t.attributes.isCategorizable!==false);
+  const cycleTx=spendTx.filter(t=>{const d=new Date(t.attributes.createdAt);return d>=cycle.start&&d<=cycle.end});
+  // Update tab active state
+  document.querySelectorAll('.week-tab').forEach((b,i)=>b.classList.toggle('active',i===idx));
+  renderWeekBars(getCycleWeeks(cycle)[idx],cycleTx,cycle,upViewCycleOffset===0,new Date());
 };
 
-function renderUpTx(query){
-  const txs=upData.transactions.filter(t=>parseFloat(t.attributes.amount.value)<0);
-  const filtered=query?txs.filter(t=>(t.attributes.description||'').toLowerCase().includes(query.toLowerCase())):txs;
-  const slice=filtered.slice(0,120);
-  set('up-tx-count',slice.length+(filtered.length>120?' of '+filtered.length:'')+' transactions');
-  document.getElementById('up-tx-list').innerHTML=slice.map(t=>{
-    const amt=parseFloat(t.attributes.amount.value);
+function renderWeekBars(week,cycleTx,cycle,isCurrentCycle,now){
+  const todayDow=now.getDay()===0?6:now.getDay()-1;
+  const days=[0,1,2,3,4,5,6];
+
+  const dayData=days.map(d=>{
+    const dayStart=new Date(week.start);dayStart.setDate(week.start.getDate()+d);dayStart.setHours(0,0,0,0);
+    const dayEnd=new Date(dayStart);dayEnd.setHours(23,59,59,999);
+    const inCycle=dayStart<=cycle.end&&dayEnd>=cycle.start;
+    const isFuture=isCurrentCycle&&dayStart>now;
+    const dayTx=cycleTx.filter(t=>{const dt=new Date(t.attributes.createdAt);return dt>=dayStart&&dt<=dayEnd});
+    const spent=dayTx.reduce((s,t)=>s+Math.abs(parseFloat(t.attributes.amount.value)),0);
+    return{dayStart,spent,inCycle,isFuture,dayTx};
+  });
+
+  const maxSpend=Math.max(...dayData.map(d=>d.spent),1);
+  const weekLabel=week.start.getDate()+' '+MN[week.start.getMonth()]+' – '+week.end.getDate()+' '+MN[week.end.getMonth()];
+  set('up-week-range',weekLabel);
+
+  document.getElementById('up-week-days').innerHTML=days.map(d=>{
+    const{dayStart,spent,inCycle,isFuture}=dayData[d];
+    const dow=dayStart.getDay()===0?6:dayStart.getDay()-1;
+    const isToday=isCurrentCycle&&dow===todayDow&&dayStart.toDateString()===now.toDateString();
+    const h=spent>0?Math.max(8,(spent/maxSpend)*100):0;
+    const isSelected=upSelectedDay===d;
+    let cls='week-day';
+    if(!inCycle)cls+=' out-of-cycle';
+    else if(isFuture)cls+=' future';
+    else if(isToday)cls+=' is-today';
+    else if(spent>0)cls+=' has-spend';
+    if(isSelected)cls+=' selected';
+    const clickable=inCycle&&!isFuture?`onclick="toggleDayDetail(${d})"`:'';
+    return`<div class="${cls}" ${clickable}><div class="day-lbl">${DAY_NAMES[d]}</div><div class="day-bar-wrap"><div class="day-bar" style="height:${h}%"></div></div><div class="day-amt">${spent>0?'$'+Math.round(spent):'—'}</div></div>`;
+  }).join('');
+
+  // Re-render day detail if one was selected
+  renderDayDetail(dayData);
+}
+
+window.toggleDayDetail=function(dayIdx){
+  upSelectedDay=upSelectedDay===dayIdx?null:dayIdx;
+  const cycle=getViewedCycle();
+  const spendTx=upData.transactions.filter(t=>parseFloat(t.attributes.amount.value)<0&&t.attributes.isCategorizable!==false);
+  const cycleTx=spendTx.filter(t=>{const d=new Date(t.attributes.createdAt);return d>=cycle.start&&d<=cycle.end});
+  const weeks=getCycleWeeks(cycle);
+  const week=weeks[upActiveWeek];
+  const now=new Date();
+  // Update selected class on day bars
+  document.querySelectorAll('#up-week-days .week-day').forEach((el,i)=>el.classList.toggle('selected',i===upSelectedDay));
+  const days=[0,1,2,3,4,5,6];
+  const dayData=days.map(d=>{
+    const dayStart=new Date(week.start);dayStart.setDate(week.start.getDate()+d);dayStart.setHours(0,0,0,0);
+    const dayEnd=new Date(dayStart);dayEnd.setHours(23,59,59,999);
+    const inCycle=dayStart<=cycle.end&&dayEnd>=cycle.start;
+    const isFuture=upViewCycleOffset===0&&dayStart>now;
+    const dayTx=cycleTx.filter(t=>{const dt=new Date(t.attributes.createdAt);return dt>=dayStart&&dt<=dayEnd});
+    const spent=dayTx.reduce((s,t)=>s+Math.abs(parseFloat(t.attributes.amount.value)),0);
+    return{dayStart,spent,inCycle,isFuture,dayTx};
+  });
+  renderDayDetail(dayData);
+};
+
+function renderDayDetail(dayData){
+  const el=document.getElementById('up-day-detail');
+  if(upSelectedDay===null){el.style.display='none';el.innerHTML='';return;}
+  const{dayStart,dayTx,spent}=dayData[upSelectedDay];
+  if(!dayTx.length){el.style.display='block';el.innerHTML='<div style="font-size:11px;color:var(--muted);padding:6px 0">No spend on this day</div>';return;}
+  // Group by merchant
+  const groups={};
+  dayTx.forEach(t=>{
+    const m=t.attributes.description||'Unknown';
+    if(!groups[m])groups[m]={count:0,total:0};
+    groups[m].count++;groups[m].total+=Math.abs(parseFloat(t.attributes.amount.value));
+  });
+  const dateStr=DAY_NAMES[dayStart.getDay()===0?6:dayStart.getDay()-1]+', '+dayStart.getDate()+' '+MN[dayStart.getMonth()];
+  el.style.display='block';
+  el.innerHTML=`<div class="day-detail-header"><span class="day-detail-date">${dateStr}</span><span class="day-detail-total">${fmt(spent)}</span></div>`+
+    Object.entries(groups).sort((a,b)=>b[1].total-a[1].total).map(([merchant,{count,total}])=>`
+      <div class="day-detail-row">
+        <div class="day-detail-icon">${upTxEmoji(merchant)}</div>
+        <div class="day-detail-name">${merchant}${count>1?` <span class="day-detail-count">×${count}</span>`:''}</div>
+        <div class="day-detail-amt">${fmt(total)}</div>
+      </div>`).join('');
+}
+
+// ── CYCLE TRANSACTIONS ─────────────────────────────────────────────────────
+function renderCycleTx(cycleTx){
+  const txs=[...cycleTx].sort((a,b)=>new Date(b.attributes.createdAt)-new Date(a.attributes.createdAt));
+  set('up-tx-count',txs.length+' transactions');
+  if(!txs.length){document.getElementById('up-tx-list').innerHTML='<div style="font-size:11px;color:var(--muted);padding:4px 0">No transactions this cycle</div>';return;}
+  // Group by date
+  const byDate={};
+  txs.forEach(t=>{
     const d=new Date(t.attributes.createdAt);
-    const dateStr=d.getDate()+' '+MN[d.getMonth()];
-    const acctId=t.relationships&&t.relationships.account&&t.relationships.account.data?t.relationships.account.data.id:'';
-    const acct=upData.accounts.find(a=>a.id===acctId);
-    const isSav=acct&&acct.attributes.accountType==='SAVER';
-    const is2Up=acct&&acct.attributes.ownershipType==='JOINT';
-    const tagClass=is2Up?'tag-joint':isSav?'tag-save':'tag-spend';
-    const acctName=acct?acct.attributes.displayName:'';
-    return`<div class="up-tx-row"><div class="up-tx-icon">${upTxEmoji(t.attributes.description)}</div><div style="flex:1;min-width:0"><div class="up-tx-name">${t.attributes.description||'—'}</div><div class="up-tx-meta">${dateStr} · <span class="up-tx-acct ${tagClass}">${acctName}</span></div></div><div class="up-tx-amt out">${fmt(Math.abs(amt))}</div></div>`;
+    const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    if(!byDate[key])byDate[key]=[];
+    byDate[key].push(t);
+  });
+  document.getElementById('up-tx-list').innerHTML=Object.entries(byDate).map(([key,dayTxs])=>{
+    const d=new Date(key+'T12:00:00');
+    const dayTotal=dayTxs.reduce((s,t)=>s+Math.abs(parseFloat(t.attributes.amount.value)),0);
+    const label=d.toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short'});
+    const rows=dayTxs.map(t=>{
+      const acctId=t.relationships&&t.relationships.account&&t.relationships.account.data?t.relationships.account.data.id:'';
+      const acct=upData.accounts.find(a=>a.id===acctId);
+      const isSav=acct&&acct.attributes.accountType==='SAVER';
+      const is2Up=acct&&acct.attributes.ownershipType==='JOINT';
+      const tagClass=is2Up?'tag-joint':isSav?'tag-save':'tag-spend';
+      const acctName=acct?acct.attributes.displayName:'';
+      return`<div class="up-tx-row"><div class="up-tx-icon">${upTxEmoji(t.attributes.description)}</div><div style="flex:1;min-width:0"><div class="up-tx-name">${t.attributes.description||'—'}</div><div class="up-tx-meta"><span class="up-tx-acct ${tagClass}">${acctName}</span></div></div><div class="up-tx-amt out">${fmt(Math.abs(parseFloat(t.attributes.amount.value)))}</div></div>`;
+    }).join('');
+    return`<div class="tx-date-group"><div class="tx-date-header"><span class="tx-date-label">${label}</span><span class="tx-date-total">${fmt(dayTotal)}</span></div>${rows}</div>`;
   }).join('');
 }
-window.filterUpTx=function(){renderUpTx(document.getElementById('up-tx-search').value)};
 
 // ── HELPERS ────────────────────────────────────────────────────────────────
 function set(id,v){const el=document.getElementById(id);if(el)el.textContent=v}
@@ -912,28 +994,38 @@ main{max-width:520px;margin:0 auto;padding:8px 16px 40px}
 .week-day.is-today .day-amt{color:var(--accent)}
 .week-day.future .day-bar-wrap{opacity:.35}
 .week-day.future .day-amt{color:var(--border)}
-.week-nav{display:flex;align-items:center;justify-content:space-between}
-.week-nav-btn{background:var(--bg);border:none;border-radius:10px;padding:6px 12px;font-size:12px;color:#6A688A;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:500;transition:all .15s}
-.week-nav-btn:hover:not(:disabled){background:var(--accent-pale);color:var(--accent)}
-.week-nav-btn:disabled{color:var(--border);cursor:default}
-.week-nav-label{font-size:11px;color:var(--muted);font-weight:500}
-.budget-editor{background:var(--surface);border-radius:18px;padding:15px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
-.budget-main-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:0}
-.budget-label{font-size:11px;color:var(--ink)}
-.budget-detected{font-size:9px;font-weight:700;background:var(--good-pale);color:var(--good);padding:1px 6px;border-radius:5px;margin-left:5px}
-.budget-val{font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--text)}
-.budget-val-input{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;width:100px;border:1.5px solid var(--accent);background:var(--accent-pale);color:var(--accent);padding:4px 8px;border-radius:8px;text-align:right;display:none}
-.budget-val-input:focus{outline:none}
-.budget-cats{margin-top:12px;padding-top:10px;border-top:1px solid var(--border);display:none}
-.budget-cat-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--bg)}
-.budget-cat-row:last-child{border-bottom:none}
-.budget-cat-name{font-size:11px;color:var(--ink);flex:1}
-.budget-cat-input{width:72px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);padding:4px 7px;border-radius:7px;font-family:'DM Sans',sans-serif;font-size:11px;text-align:right}
-.budget-cat-input:focus{outline:none;border-color:var(--accent)}
-.budget-alloc-row{display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
-.budget-alloc-lbl{font-size:11px;font-weight:600;color:var(--ink)}
-.budget-alloc-val{font-family:'Syne',sans-serif;font-size:13px;font-weight:800;color:var(--text)}
-.budget-alloc-val.over{color:var(--bad)}
+.week-day.out-of-cycle{opacity:.25;pointer-events:none}
+.week-day.out-of-cycle .day-bar{background:var(--muted)!important}
+.week-day.has-spend{cursor:pointer}
+.week-day.has-spend:hover{background:var(--accent-pale);border-radius:10px}
+.week-day.selected{background:var(--accent-pale);border-radius:10px}
+.week-day.selected .day-bar{background:var(--accent)!important}
+/* Cycle nav */
+.cycle-nav{display:flex;align-items:center;justify-content:space-between;background:var(--surface);border-radius:14px;padding:8px 14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+.cycle-nav-btn{background:var(--bg);border:none;border-radius:8px;width:30px;height:30px;font-size:18px;color:#6A688A;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;line-height:1}
+.cycle-nav-btn:hover:not(:disabled){background:var(--accent-pale);color:var(--accent)}
+.cycle-nav-btn:disabled{color:var(--border);cursor:default}
+.cycle-nav-label{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--text)}
+/* Week tabs */
+.up-week-tabs{display:flex;gap:4px;margin-bottom:10px}
+.week-tab{flex:1;padding:6px 0;font-size:11px;font-weight:700;font-family:'Syne',sans-serif;background:var(--bg);border:none;border-radius:8px;color:var(--muted);cursor:pointer;transition:all .15s}
+.week-tab.active{background:var(--accent);color:#fff}
+.week-tab:hover:not(.active){background:var(--accent-pale);color:var(--accent)}
+/* Day detail panel */
+.day-detail-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.day-detail-date{font-size:11px;font-weight:700;color:var(--muted);font-family:'Syne',sans-serif;text-transform:uppercase;letter-spacing:.3px}
+.day-detail-total{font-family:'Syne',sans-serif;font-size:13px;font-weight:800;color:var(--text)}
+.day-detail-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--bg)}
+.day-detail-row:last-child{border-bottom:none}
+.day-detail-icon{width:28px;height:28px;border-radius:8px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.day-detail-name{flex:1;font-size:12px;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.day-detail-count{font-size:10px;color:var(--muted);font-weight:600}
+.day-detail-amt{font-size:12px;font-weight:700;color:var(--bad);flex-shrink:0}
+/* Transaction date groups */
+.tx-date-group{margin-bottom:2px}
+.tx-date-header{display:flex;justify-content:space-between;align-items:center;padding:8px 0 4px;border-bottom:1px solid var(--border);margin-bottom:2px}
+.tx-date-label{font-size:10px;font-weight:700;color:var(--muted);font-family:'Syne',sans-serif;text-transform:uppercase;letter-spacing:.4px}
+.tx-date-total{font-size:11px;font-weight:700;color:var(--text);font-family:'Syne',sans-serif}
 .cat-remain-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .cat-remain-name{font-size:11px;color:#6A688A;width:90px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cat-remain-track{flex:1;height:6px;background:var(--bg);border-radius:4px;overflow:hidden}
@@ -1242,78 +1334,67 @@ main{max-width:520px;margin:0 auto;padding:8px 16px 40px}
       </div>
     </div>
     <div id="up-dashboard" style="display:none">
+
+      <!-- CYCLE NAV -->
+      <div class="cycle-nav">
+        <button class="cycle-nav-btn" id="up-cycle-prev" onclick="navUpCycle(-1)">‹</button>
+        <span class="cycle-nav-label" id="up-cycle-label">—</span>
+        <button class="cycle-nav-btn" id="up-cycle-next" onclick="navUpCycle(1)">›</button>
+      </div>
+
+      <!-- HERO -->
       <div class="up-hero">
-        <div class="up-eyebrow" id="up-eyebrow">Pay cycle · —</div>
+        <div class="up-eyebrow" id="up-eyebrow">Pay cycle</div>
         <div class="up-remaining" id="up-remaining">—</div>
-        <div class="up-remaining-lbl">left to spend this cycle</div>
+        <div class="up-remaining-lbl" id="up-remaining-lbl">left to spend this cycle</div>
         <div class="up-progress-row"><span id="up-prog-start">—</span><span id="up-prog-mid">—</span><span id="up-prog-end">—</span></div>
         <div class="up-progress-track"><div class="up-progress-fill" id="up-prog-fill" style="width:0%"></div></div>
         <div class="up-chips" id="up-chips"></div>
       </div>
+
+      <!-- PACE BANNER -->
       <div class="pace-banner" id="up-pace">
         <div class="pace-icon" id="up-pace-icon">—</div>
         <div class="pace-body"><div class="pace-hl" id="up-pace-hl">—</div><div class="pace-detail" id="up-pace-detail">—</div></div>
         <div class="pace-badge" id="up-pace-badge">—</div>
       </div>
-      <div class="budget-editor">
-        <div class="card-head" style="margin-bottom:10px">
-          <span class="card-title">Cycle budget</span>
-          <span class="card-action" id="budget-edit-btn" onclick="toggleBudgetEdit()">Edit</span>
-        </div>
-        <div class="budget-main-row">
-          <div class="budget-label">Total this cycle <span class="budget-detected" id="budget-detected" style="display:none">auto-detected</span></div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span class="budget-val" id="budget-val-display">—</span>
-            <input type="number" class="budget-val-input" id="budget-val-input" oninput="onBudgetChange()" min="0">
-          </div>
-        </div>
-        <div class="budget-cats" id="budget-cats">
-          <div id="budget-cat-rows"></div>
-          <div class="budget-alloc-row"><span class="budget-alloc-lbl">Allocated</span><span class="budget-alloc-val" id="budget-alloc-val">$0</span></div>
-        </div>
-      </div>
+
+      <!-- KPIs -->
       <div class="kpi-grid cols2">
         <div class="kpi"><div class="kpi-label">Spent this cycle</div><div class="kpi-value" id="up-k-spent">—</div><div class="kpi-sub" id="up-k-spent-sub"></div></div>
         <div class="kpi"><div class="kpi-label">Daily average</div><div class="kpi-value" id="up-k-daily">—</div><div class="kpi-sub" id="up-k-daily-sub"></div></div>
         <div class="kpi"><div class="kpi-label">Projected total</div><div class="kpi-value" id="up-k-proj">—</div><div class="kpi-sub" id="up-k-proj-sub"></div></div>
         <div class="kpi"><div class="kpi-label">Days remaining</div><div class="kpi-value" id="up-k-days">—</div><div class="kpi-sub" id="up-k-days-sub"></div></div>
       </div>
+
+      <!-- ACCOUNTS (current cycle only) -->
       <div class="acct-scroll" id="up-acct-cards"></div>
+
+      <!-- WEEK VIEW CARD -->
       <div class="week-card">
-        <div class="card-head" style="margin-bottom:10px">
-          <span class="card-title">This week</span>
-          <span class="card-badge" id="week-date-badge">—</span>
+        <div class="card-head" style="margin-bottom:8px">
+          <span class="card-title">Weekly spend</span>
+          <span class="card-badge" id="up-week-range">—</span>
         </div>
-        <div class="week-top">
-          <div>
-            <div class="week-remain-lbl">left to spend</div>
-            <div class="week-remain" id="week-remain">—</div>
-          </div>
-          <div class="week-daily-box">
-            <div class="week-daily-lbl">suggested daily</div>
-            <div class="week-daily-val" id="week-daily">—</div>
-          </div>
-        </div>
-        <div class="week-prog-wrap"><div class="week-prog-fill" id="week-prog" style="width:0%"></div></div>
-        <div class="week-days" id="week-days"></div>
-        <div class="week-nav">
-          <button class="week-nav-btn" id="week-prev-btn" onclick="navWeek(-1)">← Last week</button>
-          <span class="week-nav-label" id="week-nav-label">This week</span>
-          <button class="week-nav-btn" id="week-next-btn" onclick="navWeek(1)">Next week →</button>
-        </div>
+        <div class="up-week-tabs" id="up-week-tabs"></div>
+        <div class="week-days" id="up-week-days"></div>
+        <div id="up-day-detail" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--bg)"></div>
       </div>
+
+      <!-- CATEGORY BREAKDOWN -->
       <div class="card">
-        <div class="card-head"><span class="card-title">Category budgets</span><span class="card-badge">This cycle</span></div>
+        <div class="card-head"><span class="card-title">Category breakdown</span><span class="card-badge">This cycle</span></div>
         <div id="up-cat-bars"></div>
       </div>
+
+      <!-- TRANSACTIONS -->
       <div class="card">
-        <div class="card-head"><span class="card-title">Previous cycles</span><span class="card-badge">last 3</span></div>
-        <div id="up-prev-cycles"></div>
-      </div>
-      <div class="card">
-        <div class="tx-head"><span class="card-title">Transactions<span style="font-family:'DM Sans';font-size:10px;color:var(--muted);font-weight:400;margin-left:6px" id="up-tx-count"></span></span><input class="tx-search" id="up-tx-search" placeholder="Search…" oninput="filterUpTx()"></div>
+        <div class="tx-head">
+          <span class="card-title">Transactions<span style="font-family:'DM Sans';font-size:10px;color:var(--muted);font-weight:400;margin-left:6px" id="up-tx-count"></span></span>
+        </div>
         <div id="up-tx-list"></div>
       </div>
+
     </div>
   </div>
 </main>
