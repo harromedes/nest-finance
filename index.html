@@ -13,7 +13,7 @@ import{getFirestore,doc,collection,getDocs,setDoc,deleteDoc,getDoc}from'https://
 
 // ── FIREBASE CONFIG ── paste your config here ──────────────────────────────
 // Get this from: Firebase Console → Project Settings → Your apps → Web app → Config
-const firebaseConfig = {
+const app  = initializeApp({
     apiKey: "AIzaSyAMHf0YSYNlDUoGbwlY3LTEV0x0eziylMw",
     authDomain: "nest-finance-3970d.firebaseapp.com",
     projectId: "nest-finance-3970d",
@@ -23,9 +23,6 @@ const firebaseConfig = {
   };
 // ────────────────────────────────────────────────────────────────────────────
 
-const app  = initializeApp(FIREBASE_CONFIG);
-const auth = getAuth(app);
-const db   = getFirestore(app);
 
 // ── GLOBALS ────────────────────────────────────────────────────────────────
 const MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
