@@ -8,7 +8,7 @@
 <!-- Firebase SDK -->
 <script type="module">
 import{initializeApp}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import{getAuth,GoogleAuthProvider,signInWithPopup,signOut,onAuthStateChanged}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import{getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,getRedirectResult,signOut,onAuthStateChanged}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import{getFirestore,doc,collection,getDocs,setDoc,deleteDoc,getDoc}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 // ── FIREBASE CONFIG ── paste your config here ──────────────────────────────
@@ -48,6 +48,7 @@ let upData={accounts:[],transactions:[]};
 
 // ── AUTH STATE ─────────────────────────────────────────────────────────────
 onAuthStateChanged(auth, async user => {
+  try{const result=await getRedirectResult(auth);if(result?.user)return;}catch(e){}
   if(user){
     currentUser=user;
     showApp();
@@ -63,7 +64,7 @@ onAuthStateChanged(auth, async user => {
 window.signInWithGoogle=async()=>{
   try{
     const provider=new GoogleAuthProvider();
-    await signInWithPopup(auth,provider);
+    await signInWithRedirect(auth,provider);
   }catch(err){
     if(err.code!=='auth/popup-closed-by-user')
       document.getElementById('auth-err').textContent='Sign-in failed: '+err.message;
