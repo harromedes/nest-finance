@@ -36,7 +36,7 @@ let currentUser=null;
 let scriptURL='';
 let scriptSecret='';
 let upToken='';
-let upBudget=0;
+let upCycleBudgets={};  // key: "YYYY-MM-DD" (cycle start date), value: number
 let currentTab='anz';
 const cc={anz:{statements:[],activeIdx:0},wbc:{statements:[],activeIdx:0}};
 let upData={accounts:[],transactions:[]};
@@ -105,7 +105,7 @@ async function loadSettings(){
       scriptURL=d.scriptURL||'';
       scriptSecret=d.scriptSecret||'';
       upToken=d.upToken||'';
-      upBudget=d.upBudget||0;
+      upCycleBudgets=d.upCycleBudgets||{};
       if(scriptURL) document.getElementById('script-url').value=scriptURL;
       if(scriptSecret) document.getElementById('script-secret').value=scriptSecret;
       if(upToken) document.getElementById('up-token').value=upToken;
@@ -126,7 +126,7 @@ function setUpTokenStatus(state,msg){
 }
 
 async function saveSettings(){
-  await setDoc(settingsDoc(),{scriptURL,scriptSecret,upToken,upBudget},{merge:true});
+  await setDoc(settingsDoc(),{scriptURL,scriptSecret,upToken,upCycleBudgets},{merge:true});
 }
 
 async function loadAllStatements(){
@@ -508,7 +508,16 @@ function getCycleWeeks(cycle){
 }
 
 // Get previous cycle's total spend as the budget reference
-function getPrevCycleBudget(){
+function cycleKey(cycle){
+  const d=cycle.start;
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+function getBudgetForCycle(cycle){
+  return upCycleBudgets[cycleKey(cycle)]||0;
+}
+
+function getPrevCycleSpend(){
   const now=new Date();
   const current=getCycle(now);
   const prevRef=new Date(current.start.getTime()-86400000);
@@ -537,26 +546,27 @@ function renderUpDashboard(){
   // Future cycle — show placeholder
   if(isFutureCycle){
     const daysUntil=Math.round((cycle.start-now)/86400000);
-    const refBudget=getPrevCycleBudget();
+    const cycleBudget=getBudgetForCycle(cycle);
+    const prevSpend=getPrevCycleSpend();
     set('up-eyebrow','Future pay cycle');
-    set('up-remaining',upBudget?fmt(upBudget):refBudget?fmt(refBudget):'—');
-    document.getElementById('up-remaining-lbl').textContent=upBudget?'budget for this cycle':refBudget?'reference (last cycle spend)':'no budget set';
+    set('up-remaining',cycleBudget?fmt(cycleBudget):prevSpend?fmt(prevSpend):'—');
+    document.getElementById('up-remaining-lbl').textContent=cycleBudget?'budget for this cycle':prevSpend?'reference (last cycle spend)':'no budget set';
     set('up-prog-start',MN[cycle.start.getMonth()]+' '+cycle.start.getDate());
     set('up-prog-mid','Starts in '+daysUntil+' day'+(daysUntil!==1?'s':''));
     set('up-prog-end',MN[cycle.end.getMonth()]+' '+cycle.end.getDate());
     document.getElementById('up-prog-fill').style.width='0%';
-    document.getElementById('up-chips').innerHTML=`<div class="up-chip neutral">Starts in ${daysUntil} day${daysUntil!==1?'s':''}</div>${upBudget?`<div class="up-chip neutral">${fmt(upBudget)} budget</div>`:refBudget?`<div class="up-chip neutral">Last cycle: ${fmt(refBudget)}</div>`:''}`;
+    document.getElementById('up-chips').innerHTML=`<div class="up-chip neutral">Starts in ${daysUntil} day${daysUntil!==1?'s':''}</div>${cycleBudget?`<div class="up-chip neutral">${fmt(cycleBudget)} budget</div>`:prevSpend?`<div class="up-chip neutral">Last cycle: ${fmt(prevSpend)}</div>`:''}`;
     const budgetPillElF=document.getElementById('up-budget-pill');
-    if(budgetPillElF){budgetPillElF.innerHTML=upBudget?`<span class="budget-pill-label">Budget</span><span class="budget-pill-val">${fmt(upBudget)}</span><span class="budget-pill-edit" onclick="openBudgetEdit()">edit</span>`:`<span class="budget-pill-label">No budget set</span><span class="budget-pill-edit" onclick="openBudgetEdit()">set budget</span>`;}
+    if(budgetPillElF){budgetPillElF.innerHTML=cycleBudget?`<span class="budget-pill-label">Budget</span><span class="budget-pill-val">${fmt(cycleBudget)}</span><span class="budget-pill-edit" onclick="openBudgetEdit()">edit</span>`:`<span class="budget-pill-label">No budget set</span><span class="budget-pill-edit" onclick="openBudgetEdit()">set budget</span>`;}
     const pb=document.getElementById('up-pace');
     pb.className='pace-banner warn';
     set('up-pace-icon','📅');
     set('up-pace-hl','Cycle hasn\'t started yet');
-    set('up-pace-detail',`${MN[cycle.start.getMonth()]} ${cycle.start.getDate()} – ${MN[cycle.end.getMonth()]} ${cycle.end.getDate()}${upBudget?' · Budget: '+fmt(upBudget):refBudget?' · Last cycle: '+fmt(refBudget):''}`);
+    set('up-pace-detail',`${MN[cycle.start.getMonth()]} ${cycle.start.getDate()} – ${MN[cycle.end.getMonth()]} ${cycle.end.getDate()}${cycleBudget?' · Budget: '+fmt(cycleBudget):prevSpend?' · Last cycle: '+fmt(prevSpend):''}`);
     set('up-pace-badge','—');
     set('up-k-spent','—');set('up-k-spent-sub','');
     set('up-k-daily','—');set('up-k-daily-sub','');
-    set('up-k-proj',upBudget?fmt(upBudget):refBudget?fmt(refBudget):'—');set('up-k-proj-sub',upBudget?'your budget':refBudget?'last cycle spend':'');
+    set('up-k-proj',cycleBudget?fmt(cycleBudget):prevSpend?fmt(prevSpend):'—');set('up-k-proj-sub',cycleBudget?'your budget':prevSpend?'last cycle spend':'');
     set('up-k-days','30');set('up-k-days-sub','day cycle');
     document.getElementById('up-acct-cards').style.display='none';
     document.getElementById('up-cat-bars').innerHTML='<div style="font-size:11px;color:var(--muted)">No data yet — cycle starts in '+daysUntil+' day'+(daysUntil!==1?'s':'')+'</div>';
@@ -574,20 +584,21 @@ function renderUpDashboard(){
   const cycleTx=spendTx.filter(t=>{const d=new Date(t.attributes.createdAt);return d>=cycle.start&&d<=cycle.end});
   const cycleSpent=cycleTx.reduce((s,t)=>s+Math.abs(parseFloat(t.attributes.amount.value)),0);
 
-  // Budget = prev cycle's total spend (read-only reference)
-  const refBudget=getPrevCycleBudget();
+  // Per-cycle budget + prev cycle spend as reference
+  const cycleBudget=getBudgetForCycle(cycle);
+  const prevSpend=getPrevCycleSpend();
 
   // Hero stats
   const totalDays=Math.round((cycle.end-cycle.start)/86400000)+1;
   const cutoff=isCurrentCycle?Math.min(now,cycle.end):cycle.end;
   const daysSoFar=Math.min(Math.round((cutoff-cycle.start)/86400000)+1,totalDays);
   const pct=Math.min(100,daysSoFar/totalDays*100);
-  const remaining=upBudget?Math.max(0,upBudget-cycleSpent):null;
+  const remaining=cycleBudget?Math.max(0,cycleBudget-cycleSpent):null;
   const dailyAvg=daysSoFar>0?cycleSpent/daysSoFar:0;
   const projected=dailyAvg*totalDays;
 
   set('up-eyebrow',(isCurrentCycle?'Current':'Past')+' pay cycle');
-  if(isCurrentCycle&&upBudget){
+  if(isCurrentCycle&&cycleBudget){
     set('up-remaining',fmt(remaining));
     document.getElementById('up-remaining-lbl').textContent='left to spend this cycle';
   } else if(isCurrentCycle){
@@ -605,42 +616,42 @@ function renderUpDashboard(){
   // Budget pill — tappable to edit
   const budgetPillEl=document.getElementById('up-budget-pill');
   if(budgetPillEl){
-    budgetPillEl.innerHTML=upBudget
-      ?`<span class="budget-pill-label">Budget</span><span class="budget-pill-val">${fmt(upBudget)}</span><span class="budget-pill-edit" onclick="openBudgetEdit()">edit</span>`
+    budgetPillEl.innerHTML=cycleBudget
+      ?`<span class="budget-pill-label">Budget</span><span class="budget-pill-val">${fmt(cycleBudget)}</span><span class="budget-pill-edit" onclick="openBudgetEdit()">edit</span>`
       :`<span class="budget-pill-label">No budget set</span><span class="budget-pill-edit" onclick="openBudgetEdit()">set budget</span>`;
   }
 
   // Chips
-  const budgetProg=upBudget?cycleSpent/upBudget:null;
+  const budgetProg=cycleBudget?cycleSpent/cycleBudget:null;
   const chips=[];
-  if(upBudget){const diff=(budgetProg||0)-pct/100;chips.push(`<div class="up-chip ${diff>0.1?'bad':diff<-0.1?'good':'neutral'}">${diff>0.1?'⚠ Ahead of pace':diff<-0.1?'✓ Under pace':'➔ On pace'}</div>`);}
-  if(refBudget) chips.push(`<div class="up-chip neutral">Last cycle: ${fmt(refBudget)}</div>`);
+  if(cycleBudget){const diff=(budgetProg||0)-pct/100;chips.push(`<div class="up-chip ${diff>0.1?'bad':diff<-0.1?'good':'neutral'}">${diff>0.1?'⚠ Ahead of pace':diff<-0.1?'✓ Under pace':'➔ On pace'}</div>`);}
+  if(prevSpend) chips.push(`<div class="up-chip neutral">Last cycle: ${fmt(prevSpend)}</div>`);
   if(isCurrentCycle) chips.push(`<div class="up-chip neutral">${totalDays-daysSoFar} days left</div>`);
   document.getElementById('up-chips').innerHTML=chips.join('');
 
   // Pace banner
   const pb=document.getElementById('up-pace');
-  if(upBudget&&budgetProg!==null&&isCurrentCycle){
+  if(cycleBudget&&budgetProg!==null&&isCurrentCycle){
     const diff=budgetProg-pct/100;
-    if(diff>0.1){pb.className='pace-banner bad';set('up-pace-icon','⚠');set('up-pace-hl','Spending ahead of pace');set('up-pace-detail',Math.round(pct)+'% through cycle, '+Math.round(budgetProg*100)+'% of budget used. Projected '+fmt(projected)+' — '+fmt(projected-upBudget)+' over.');set('up-pace-badge',fmt(cycleSpent))}
-    else if(diff<-0.1){pb.className='pace-banner good';set('up-pace-icon','✓');set('up-pace-hl','Tracking under budget');set('up-pace-detail',Math.round(pct)+'% through cycle, '+Math.round(budgetProg*100)+'% of budget used — projected '+fmt(projected)+', '+fmt(upBudget-projected)+' under.');set('up-pace-badge',fmt(remaining))}
+    if(diff>0.1){pb.className='pace-banner bad';set('up-pace-icon','⚠');set('up-pace-hl','Spending ahead of pace');set('up-pace-detail',Math.round(pct)+'% through cycle, '+Math.round(budgetProg*100)+'% of budget used. Projected '+fmt(projected)+' — '+fmt(projected-cycleBudget)+' over.');set('up-pace-badge',fmt(cycleSpent))}
+    else if(diff<-0.1){pb.className='pace-banner good';set('up-pace-icon','✓');set('up-pace-hl','Tracking under budget');set('up-pace-detail',Math.round(pct)+'% through cycle, '+Math.round(budgetProg*100)+'% of budget used — projected '+fmt(projected)+', '+fmt(cycleBudget-projected)+' under.');set('up-pace-badge',fmt(remaining))}
     else{pb.className='pace-banner warn';set('up-pace-icon','➔');set('up-pace-hl','On pace');set('up-pace-detail',Math.round(pct)+'% through cycle, '+Math.round(budgetProg*100)+'% of budget used.');set('up-pace-badge',fmt(cycleSpent))}
   }else if(!isCurrentCycle){
-    const under=upBudget?upBudget-cycleSpent:null;
+    const under=cycleBudget?cycleBudget-cycleSpent:null;
     pb.className='pace-banner '+(under===null?'warn':under>=0?'good':'bad');
     set('up-pace-icon',under===null?'📋':under>=0?'✓':'⚠');
     set('up-pace-hl',under===null?fmt(cycleSpent)+' spent this cycle':under>=0?fmt(under)+' under budget':fmt(Math.abs(under))+' over budget');
-    set('up-pace-detail',upBudget?'Budget: '+fmt(upBudget)+(refBudget?' · Prev cycle: '+fmt(refBudget):''):(refBudget?'Prev cycle: '+fmt(refBudget):'No budget set'));
+    set('up-pace-detail',cycleBudget?'Budget: '+fmt(cycleBudget)+(prevSpend?' · Prev cycle: '+fmt(prevSpend):''):(prevSpend?'Prev cycle: '+fmt(prevSpend):'No budget set'));
     set('up-pace-badge',fmt(cycleSpent));
   }else{
-    pb.className='pace-banner warn';set('up-pace-icon','💡');set('up-pace-hl','Day '+daysSoFar+' of '+totalDays+' — '+fmt(cycleSpent)+' spent');set('up-pace-detail',refBudget?'Last cycle: '+fmt(refBudget)+' — set a budget to track pace':'Set a budget to track pace');set('up-pace-badge',fmt(dailyAvg)+'/day');
+    pb.className='pace-banner warn';set('up-pace-icon','💡');set('up-pace-hl','Day '+daysSoFar+' of '+totalDays+' — '+fmt(cycleSpent)+' spent');set('up-pace-detail',prevSpend?'Last cycle: '+fmt(prevSpend)+' — set a budget to track pace':'Set a budget to track pace');set('up-pace-badge',fmt(dailyAvg)+'/day');
   }
 
   // KPIs
-  set('up-k-spent',fmt(cycleSpent));set('up-k-spent-sub',refBudget?'last cycle: '+fmt(refBudget):'');
+  set('up-k-spent',fmt(cycleSpent));set('up-k-spent-sub',prevSpend?'last cycle: '+fmt(prevSpend):'');
   set('up-k-daily',fmt(dailyAvg));set('up-k-daily-sub','over '+daysSoFar+' day'+(daysSoFar!==1?'s':''));
-  set('up-k-proj',isCurrentCycle?fmt(projected):'—');set('up-k-proj-sub',isCurrentCycle&&upBudget?(projected>upBudget?'▲ '+fmt(projected-upBudget)+' over':'▼ '+fmt(upBudget-projected)+' under'):'');
-  set('up-k-days',isCurrentCycle?String(totalDays-daysSoFar):String(totalDays));set('up-k-days-sub',isCurrentCycle&&upBudget?fmt((upBudget-cycleSpent)/Math.max(1,totalDays-daysSoFar))+'/day remaining':'days remaining');
+  set('up-k-proj',isCurrentCycle?fmt(projected):'—');set('up-k-proj-sub',isCurrentCycle&&cycleBudget?(projected>cycleBudget?'▲ '+fmt(projected-cycleBudget)+' over':'▼ '+fmt(cycleBudget-projected)+' under'):'');
+  set('up-k-days',isCurrentCycle?String(totalDays-daysSoFar):String(totalDays));set('up-k-days-sub',isCurrentCycle&&cycleBudget?fmt((cycleBudget-cycleSpent)/Math.max(1,totalDays-daysSoFar))+'/day remaining':'days remaining');
 
   // Accounts (only show on current cycle)
   const acctEl=document.getElementById('up-acct-cards');
@@ -681,9 +692,14 @@ window.navUpCycle=function(dir){
 };
 
 window.openBudgetEdit=function(){
-  const overlay=document.getElementById('budget-edit-overlay');
-  document.getElementById('budget-edit-input').value=upBudget||'';
-  overlay.style.display='flex';
+  const cycle=getViewedCycle();
+  const current=getBudgetForCycle(cycle);
+  const prevSpend=getPrevCycleSpend();
+  const label=MN[cycle.start.getMonth()]+' '+cycle.start.getDate()+' – '+MN[cycle.end.getMonth()]+' '+cycle.end.getDate();
+  document.getElementById('budget-edit-cycle-label').textContent=label;
+  document.getElementById('budget-edit-prev-spend').textContent=prevSpend?'Last cycle spent: '+fmt(prevSpend):'';
+  document.getElementById('budget-edit-input').value=current||'';
+  document.getElementById('budget-edit-overlay').style.display='flex';
   setTimeout(()=>document.getElementById('budget-edit-input').focus(),50);
 };
 window.closeBudgetEdit=function(){
@@ -691,7 +707,10 @@ window.closeBudgetEdit=function(){
 };
 window.saveBudgetEdit=async function(){
   const v=parseFloat(document.getElementById('budget-edit-input').value);
-  upBudget=isNaN(v)||v<=0?0:v;
+  const cycle=getViewedCycle();
+  const key=cycleKey(cycle);
+  if(isNaN(v)||v<=0) delete upCycleBudgets[key];
+  else upCycleBudgets[key]=v;
   await saveSettings();
   closeBudgetEdit();
   renderUpDashboard();
@@ -701,28 +720,31 @@ window.budgetEditKey=function(e){if(e.key==='Enter')saveBudgetEdit();};
 // ── CYCLE WEEK VIEW ────────────────────────────────────────────────────────
 function renderCycleWeeks(cycle,cycleTx){
   const weeks=getCycleWeeks(cycle);
-  const now=new Date();
   const isCurrentCycle=upViewCycleOffset===0;
+  const cycleBudget=getBudgetForCycle(cycle);
 
-  // Week tabs
-  document.getElementById('up-week-tabs').innerHTML=weeks.map((w,i)=>`
-    <button class="week-tab${i===upActiveWeek?' active':''}" onclick="selectUpWeek(${i})">W${i+1}</button>`).join('');
+  // Week tabs with weekly spend totals
+  document.getElementById('up-week-tabs').innerHTML=weeks.map((w,i)=>{
+    const wTx=cycleTx.filter(t=>{const d=new Date(t.attributes.createdAt);return d>=w.start&&d<=w.end;});
+    const wSpent=wTx.reduce((s,t)=>s+Math.abs(parseFloat(t.attributes.amount.value)),0);
+    return`<button class="week-tab${i===upActiveWeek?' active':''}" onclick="selectUpWeek(${i})">W${i+1}${wSpent>0?`<span class="week-tab-amt">$${Math.round(wSpent)}</span>`:''}</button>`;
+  }).join('');
 
-  renderWeekBars(weeks[upActiveWeek],cycleTx,cycle,isCurrentCycle,now);
+  renderWeekBars(weeks[upActiveWeek],cycleTx,cycle,isCurrentCycle,new Date(),cycleBudget);
 }
 
 window.selectUpWeek=function(idx){
   upActiveWeek=idx;
   upSelectedDay=null;
   const cycle=getViewedCycle();
+  const cycleBudget=getBudgetForCycle(cycle);
   const spendTx=upData.transactions.filter(t=>parseFloat(t.attributes.amount.value)<0&&t.attributes.isCategorizable!==false);
   const cycleTx=spendTx.filter(t=>{const d=new Date(t.attributes.createdAt);return d>=cycle.start&&d<=cycle.end});
-  // Update tab active state
   document.querySelectorAll('.week-tab').forEach((b,i)=>b.classList.toggle('active',i===idx));
-  renderWeekBars(getCycleWeeks(cycle)[idx],cycleTx,cycle,upViewCycleOffset===0,new Date());
+  renderWeekBars(getCycleWeeks(cycle)[idx],cycleTx,cycle,upViewCycleOffset===0,new Date(),cycleBudget);
 };
 
-function renderWeekBars(week,cycleTx,cycle,isCurrentCycle,now){
+function renderWeekBars(week,cycleTx,cycle,isCurrentCycle,now,cycleBudget){
   const todayDow=now.getDay()===0?6:now.getDay()-1;
   const days=[0,1,2,3,4,5,6];
 
@@ -736,9 +758,20 @@ function renderWeekBars(week,cycleTx,cycle,isCurrentCycle,now){
     return{dayStart,spent,inCycle,isFuture,dayTx};
   });
 
+  const weekSpent=dayData.reduce((s,d)=>s+d.spent,0);
   const maxSpend=Math.max(...dayData.map(d=>d.spent),1);
   const weekLabel=week.start.getDate()+' '+MN[week.start.getMonth()]+' – '+week.end.getDate()+' '+MN[week.end.getMonth()];
   set('up-week-range',weekLabel);
+
+  // Week summary row
+  const weekPct=cycleBudget?Math.round(weekSpent/cycleBudget*100):null;
+  const pctCol=weekPct===null?'var(--muted)':weekPct>35?'var(--bad)':weekPct>25?'var(--warn)':'var(--good)';
+  const summaryEl=document.getElementById('up-week-summary');
+  if(summaryEl){
+    summaryEl.innerHTML=weekSpent>0
+      ?`<span class="week-summary-spent">${fmt(weekSpent)}</span>${weekPct!==null?`<span class="week-summary-pct" style="color:${pctCol}">${weekPct}% of cycle budget</span>`:''}`
+      :`<span class="week-summary-spent" style="color:var(--muted)">No spend this week</span>`;
+  }
 
   document.getElementById('up-week-days').innerHTML=days.map(d=>{
     const{dayStart,spent,inCycle,isFuture}=dayData[d];
@@ -756,7 +789,6 @@ function renderWeekBars(week,cycleTx,cycle,isCurrentCycle,now){
     return`<div class="${cls}" ${clickable}><div class="day-lbl">${DAY_NAMES[d]}</div><div class="day-bar-wrap"><div class="day-bar" style="height:${h}%"></div></div><div class="day-amt">${spent>0?'$'+Math.round(spent):'—'}</div></div>`;
   }).join('');
 
-  // Re-render day detail if one was selected
   renderDayDetail(dayData);
 }
 
@@ -1094,6 +1126,11 @@ main{max-width:520px;margin:0 auto;padding:8px 16px 40px}
 .week-tab{flex:1;padding:6px 0;font-size:11px;font-weight:700;font-family:'Syne',sans-serif;background:var(--bg);border:none;border-radius:8px;color:var(--muted);cursor:pointer;transition:all .15s}
 .week-tab.active{background:var(--accent);color:#fff}
 .week-tab:hover:not(.active){background:var(--accent-pale);color:var(--accent)}
+.week-tab-amt{display:block;font-size:9px;font-weight:600;opacity:.8;margin-top:1px}
+/* Week summary */
+.week-summary{display:flex;align-items:center;justify-content:space-between;padding:6px 2px 8px;min-height:24px}
+.week-summary-spent{font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:var(--text)}
+.week-summary-pct{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--bg)}
 /* Day detail panel */
 .day-detail-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
 .day-detail-date{font-size:11px;font-weight:700;color:var(--muted);font-family:'Syne',sans-serif;text-transform:uppercase;letter-spacing:.3px}
@@ -1461,6 +1498,7 @@ main{max-width:520px;margin:0 auto;padding:8px 16px 40px}
           <span class="card-badge" id="up-week-range">—</span>
         </div>
         <div class="up-week-tabs" id="up-week-tabs"></div>
+        <div id="up-week-summary" class="week-summary"></div>
         <div class="week-days" id="up-week-days"></div>
         <div id="up-day-detail" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--bg)"></div>
       </div>
@@ -1486,8 +1524,9 @@ main{max-width:520px;margin:0 auto;padding:8px 16px 40px}
 <!-- BUDGET EDIT OVERLAY -->
 <div id="budget-edit-overlay" style="display:none;position:fixed;inset:0;background:rgba(26,24,48,0.45);z-index:200;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)closeBudgetEdit()">
   <div style="background:#fff;border-radius:20px;padding:24px;width:100%;max-width:320px;box-shadow:0 8px 32px rgba(99,85,216,0.18)">
-    <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:var(--text);margin-bottom:6px">Set cycle budget</div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:16px">Applies to all cycles. Last cycle spend shown as reference context.</div>
+    <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:var(--text);margin-bottom:4px">Set cycle budget</div>
+    <div id="budget-edit-cycle-label" style="font-size:11px;color:var(--accent);font-weight:600;margin-bottom:4px"></div>
+    <div id="budget-edit-prev-spend" style="font-size:11px;color:var(--muted);margin-bottom:14px"></div>
     <input id="budget-edit-input" type="number" min="0" step="50" placeholder="e.g. 2500" onkeydown="budgetEditKey(event)"
       style="width:100%;border:2px solid var(--accent);background:var(--accent-pale);color:var(--accent);padding:12px 14px;border-radius:12px;font-family:'Syne',sans-serif;font-size:22px;font-weight:800;text-align:center;margin-bottom:14px;outline:none">
     <div style="display:flex;gap:8px">
