@@ -397,14 +397,14 @@ main{max-width:520px;margin:0 auto;padding:8px 16px 40px}
       <div class="upload-zone" id="anz-drop" onclick="document.getElementById('file-input-anz').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event,'anz')">
         <span class="upload-icon">📄</span>
         <div class="upload-title">Upload ANZ statement</div>
-        <div class="upload-sub">PDF — AI reads and categorises everything</div>
-        <button class="btn-upload" onclick="event.stopPropagation();document.getElementById('file-input-anz').click()">Choose PDF</button>
-        <input type="file" id="file-input-anz" accept=".pdf" onchange="handleFile(this.files[0],'anz')">
+        <div class="upload-sub">Drop one or more PDFs — AI reads and categorises each one</div>
+        <button class="btn-upload" onclick="event.stopPropagation();document.getElementById('file-input-anz').click()">Choose PDFs</button>
+        <input type="file" id="file-input-anz" accept=".pdf" multiple onchange="handleFiles(this.files,'anz')">
       </div>
     </div>
     <div id="anz-processing" class="processing">
       <div class="loader"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-      <div class="proc-title">Reading your statement</div>
+      <div class="proc-title" id="anz-proc-title">Reading your statement</div>
       <div class="proc-sub" id="anz-proc-sub">Sending to Apps Script…</div>
     </div>
     <div id="anz-dashboard" style="display:none">
@@ -497,14 +497,14 @@ main{max-width:520px;margin:0 auto;padding:8px 16px 40px}
       <div class="upload-zone" id="wbc-drop" onclick="document.getElementById('file-input-wbc').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event,'wbc')">
         <span class="upload-icon">📄</span>
         <div class="upload-title">Upload Westpac statement</div>
-        <div class="upload-sub">PDF — same AI pipeline as ANZ</div>
-        <button class="btn-upload" onclick="event.stopPropagation();document.getElementById('file-input-wbc').click()">Choose PDF</button>
-        <input type="file" id="file-input-wbc" accept=".pdf" onchange="handleFile(this.files[0],'wbc')">
+        <div class="upload-sub">Drop one or more PDFs — same AI pipeline as ANZ</div>
+        <button class="btn-upload" onclick="event.stopPropagation();document.getElementById('file-input-wbc').click()">Choose PDFs</button>
+        <input type="file" id="file-input-wbc" accept=".pdf" multiple onchange="handleFiles(this.files,'wbc')">
       </div>
     </div>
     <div id="wbc-processing" class="processing">
       <div class="loader"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-      <div class="proc-title">Reading your statement</div>
+      <div class="proc-title" id="wbc-proc-title">Reading your statement</div>
       <div class="proc-sub" id="wbc-proc-sub">Sending to Apps Script…</div>
     </div>
     <div id="wbc-dashboard" style="display:none">
@@ -782,33 +782,42 @@ function setNav(type,msg){
 }
 
 // ── CC UPLOAD ─────────────────────────────────────────────────────────────────
-function handleDrop(e,bank){e.preventDefault();document.getElementById(bank+'-drop').classList.remove('drag');const f=e.dataTransfer.files[0];if(f&&f.type==='application/pdf')handleFile(f,bank);else showAlertMsg(bank+'-alert-err','Please drop a PDF.')}
+function handleDrop(e,bank){e.preventDefault();document.getElementById(bank+'-drop').classList.remove('drag');const files=Array.from(e.dataTransfer.files).filter(f=>f.type==='application/pdf');if(files.length)handleFiles(files,bank);else showAlertMsg(bank+'-alert-err','Please drop PDF files only.')}
 
-async function handleFile(file,bank){
-  if(!file)return;
+async function handleFiles(fileList,bank){
+  const files=Array.from(fileList).filter(f=>f.type==='application/pdf');
+  if(!files.length)return;
   if(!scriptURL){showAlertMsg(bank+'-alert-err','Add your Apps Script URL in Configure first.');return}
-  showProc(bank,true,'Sending PDF…');
-  try{
-    const b64=await toBase64(file);
-    showProc(bank,true,'AI is reading & categorising…');
-    const res=await sendToScript({pdf_base64:b64,secret:scriptSecret,bank});
-    if(res.status==='error') throw new Error(res.message);
-    const parsed=res.data;
-    if(res.sheetUrl){sheetURL=res.sheetUrl;localStorage.setItem('nest_sheet_url',sheetURL)}
-    const stmts=cc[bank].statements;
-    const idx=stmts.findIndex(s=>s.period===parsed.period);
-    if(idx>=0)stmts[idx]=parsed;else stmts.push(parsed);
-    stmts.sort((a,b)=>new Date(a.period_start)-new Date(b.period_start));
-    cc[bank].activeIdx=stmts.findIndex(s=>s.period===parsed.period);
-    localStorage.setItem('nest_cc_'+bank,JSON.stringify(stmts));
-    showProc(bank,false);
-    showCCDashboard(bank);
-  }catch(err){showProc(bank,false);showAlertMsg(bank+'-alert-err','Error: '+err.message)}
+  const total=files.length;
+  for(let i=0;i<files.length;i++){
+    const file=files[i];
+    showProc(bank,true,total>1?`Processing ${i+1} of ${total}: ${file.name}`:'Sending PDF…');
+    try{
+      const b64=await toBase64(file);
+      showProc(bank,true,total>1?`Reading ${i+1} of ${total}: ${file.name}…`:'AI is reading & categorising…');
+      const res=await sendToScript({pdf_base64:b64,secret:scriptSecret,bank});
+      if(res.status==='error') throw new Error(res.message+' ('+file.name+')');
+      const parsed=res.data;
+      if(res.sheetUrl){sheetURL=res.sheetUrl;localStorage.setItem('nest_sheet_url',sheetURL)}
+      const stmts=cc[bank].statements;
+      const idx=stmts.findIndex(s=>s.period===parsed.period);
+      if(idx>=0)stmts[idx]=parsed;else stmts.push(parsed);
+      stmts.sort((a,b)=>new Date(a.period_start)-new Date(b.period_start));
+      cc[bank].activeIdx=stmts.findIndex(s=>s.period===parsed.period);
+      localStorage.setItem('nest_cc_'+bank,JSON.stringify(stmts));
+    }catch(err){
+      showProc(bank,false);
+      showAlertMsg(bank+'-alert-err','Error on '+file.name+': '+err.message);
+      return; // stop batch on error
+    }
+  }
+  showProc(bank,false);
+  showCCDashboard(bank);
 }
 
 function toBase64(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=()=>rej(new Error('Read failed'));r.readAsDataURL(f)})}
 async function sendToScript(body){const r=await fetch(scriptURL,{method:'POST',body:JSON.stringify(body),redirect:'follow'});if(!r.ok)throw new Error('Script returned '+r.status);return await r.json()}
-function showProc(bank,show,msg){document.getElementById(bank+'-processing').classList.toggle('show',show);document.getElementById(bank+'-upload-section').classList.toggle('hidden',show);if(msg)document.getElementById(bank+'-proc-sub').textContent=msg}
+function showProc(bank,show,msg,total){document.getElementById(bank+'-processing').classList.toggle('show',show);document.getElementById(bank+'-upload-section').classList.toggle('hidden',show);if(msg)document.getElementById(bank+'-proc-sub').textContent=msg;const titleEl=document.getElementById(bank+'-proc-title');if(titleEl)titleEl.textContent=total&&total>1?'Reading statements ('+total+' files)':'Reading your statement';}
 function showUploadSection(bank){document.getElementById(bank+'-upload-section').classList.remove('hidden');document.getElementById(bank+'-dashboard').style.display='none'}
 function openSheet(){if(sheetURL)window.open(sheetURL,'_blank')}
 
