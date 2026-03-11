@@ -31,6 +31,8 @@ getRedirectResult(auth).catch(err=>{
   if(err.code!=='auth/popup-closed-by-user')
     document.getElementById('auth-err').textContent='Sign-in failed: '+err.message;
 
+});
+  
 // ── GLOBALS ────────────────────────────────────────────────────────────────
 const MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DAY_NAMES=['MON','TUE','WED','THU','FRI','SAT','SUN'];
