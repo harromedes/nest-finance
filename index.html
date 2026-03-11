@@ -321,7 +321,7 @@ function drawBalanceLine(canvasId,stmts,activeIdx,accentCol,accentPale){
   const W=wrap.offsetWidth||420,H=130;
   canvas.width=W*dpr;canvas.height=H*dpr;canvas.style.width=W+'px';canvas.style.height=H+'px';
   const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,W,H);
-  const n=stmts.length,pad={t:16,r:12,b:22,l:42};
+  const n=stmts.length,pad={t:16,r:60,b:22,l:42};
   const cW=W-pad.l-pad.r,cH=H-pad.t-pad.b;
   const maxV=Math.max(...stmts.map(s=>s.closing_balance))*1.18||1;
   const xP=i=>pad.l+(n===1?cW/2:(i/(n-1))*cW);
