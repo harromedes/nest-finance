@@ -338,7 +338,7 @@ function drawBalanceLine(canvasId,stmts,activeIdx,accentCol,accentPale){
   ctx.beginPath();ctx.strokeStyle=accentCol;ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.lineCap='round';
   stmts.forEach((s,i)=>i===0?ctx.moveTo(xP(i),yP(s.closing_balance)):ctx.lineTo(xP(i),yP(s.closing_balance)));ctx.stroke();
   stmts.forEach((s,i)=>drawDot(ctx,xP(i),yP(s.closing_balance),accentCol,i===activeIdx?5:3,i===activeIdx));
-  const as=stmts[activeIdx];const lx=Math.min(Math.max(xP(activeIdx),pad.l+18),pad.l+cW-18);
+  const as=stmts[activeIdx];const lx=Math.min(Math.max(xP(activeIdx),pad.l+18),pad.l+cW-50);
   ctx.fillStyle=accentCol;ctx.font='bold 9px DM Sans';ctx.textAlign='center';
   ctx.fillText(fmt(as.closing_balance),lx,Math.max(pad.t+8,yP(as.closing_balance)-7));
 }
