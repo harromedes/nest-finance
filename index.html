@@ -25,13 +25,6 @@ const app = initializeApp({
 
 const auth = getAuth(app);
 const db   = getFirestore(app);
-
-// Handle redirect result on page load
-getRedirectResult(auth).catch(err=>{
-  if(err.code!=='auth/popup-closed-by-user')
-    document.getElementById('auth-err').textContent='Sign-in failed: '+err.message;
-
-});
   
 // ── GLOBALS ────────────────────────────────────────────────────────────────
 const MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -70,7 +63,7 @@ onAuthStateChanged(auth, async user => {
 window.signInWithGoogle=async()=>{
   try{
     const provider=new GoogleAuthProvider();
-    await signInWithRedirect(auth,provider);
+    await signInWithPopup(auth,provider);
   }catch(err){
     if(err.code!=='auth/popup-closed-by-user')
       document.getElementById('auth-err').textContent='Sign-in failed: '+err.message;
