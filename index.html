@@ -23,6 +23,8 @@ const app  = initializeApp({
   });
 // ────────────────────────────────────────────────────────────────────────────
 
+const auth = getAuth(app);
+const db = getFirestore(app);
 
 // ── GLOBALS ────────────────────────────────────────────────────────────────
 const MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
