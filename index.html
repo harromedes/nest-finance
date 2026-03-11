@@ -13,18 +13,19 @@ import{getFirestore,doc,collection,getDocs,setDoc,deleteDoc,getDoc}from'https://
 
 // ── FIREBASE CONFIG ── paste your config here ──────────────────────────────
 // Get this from: Firebase Console → Project Settings → Your apps → Web app → Config
-const app  = initializeApp({
-    apiKey: "AIzaSyAMHf0YSYNlDUoGbwlY3LTEV0x0eziylMw",
-    authDomain: "nest-finance-3970d.firebaseapp.com",
-    projectId: "nest-finance-3970d",
-    storageBucket: "nest-finance-3970d.firebasestorage.app",
-    messagingSenderId: "31547424429",
-    appId: "1:31547424429:web:2ee6cfbee2e9bd97849024"
-  });
+const FIREBASE_CONFIG = {
+  apiKey:            "PASTE_YOUR_apiKey_HERE",
+  authDomain:        "PASTE_YOUR_authDomain_HERE",
+  projectId:         "PASTE_YOUR_projectId_HERE",
+  storageBucket:     "PASTE_YOUR_storageBucket_HERE",
+  messagingSenderId: "PASTE_YOUR_messagingSenderId_HERE",
+  appId:             "PASTE_YOUR_appId_HERE"
+};
 // ────────────────────────────────────────────────────────────────────────────
 
+const app  = initializeApp(FIREBASE_CONFIG);
 const auth = getAuth(app);
-const db = getFirestore(app);
+const db   = getFirestore(app);
 
 // ── GLOBALS ────────────────────────────────────────────────────────────────
 const MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -112,8 +113,20 @@ async function loadSettings(){
       if(scriptURL) document.getElementById('script-url').value=scriptURL;
       if(scriptSecret) document.getElementById('script-secret').value=scriptSecret;
       if(upToken) document.getElementById('up-token').value=upToken;
+      setUpTokenStatus(upToken?'saved':null);
     }
   }catch(err){console.warn('loadSettings:',err)}
+}
+
+function setUpTokenStatus(state,msg){
+  const el=document.getElementById('up-token-status');
+  if(!el)return;
+  if(!state){el.style.display='none';return}
+  el.style.display='inline-block';
+  if(state==='saved'){el.className='up-token-status ok';el.textContent='✓ Token saved'}
+  else if(state==='ok'){el.className='up-token-status ok';el.textContent='✓ Connected to Up'}
+  else if(state==='error'){el.className='up-token-status error';el.textContent='✗ '+(msg||'Connection failed')}
+  else{el.className='up-token-status missing';el.textContent='No token — Up tab won\'t load'}
 }
 
 async function saveSettings(){
@@ -210,13 +223,12 @@ function toBase64(f){return new Promise((res,rej)=>{const r=new FileReader();r.o
 async function sendToScript(body){const r=await fetch(scriptURL,{method:'POST',body:JSON.stringify(body),redirect:'follow'});if(!r.ok)throw new Error('Script returned '+r.status);return await r.json()}
 
 window.showUploadSection=function(bank){
-  document.getElementById(bank+'-upload-section').classList.remove('hidden');
-  document.getElementById(bank+'-dashboard').style.display='none';
+  // For compact zone, just trigger file picker directly
+  document.getElementById('file-input-'+bank).click();
 };
 
 // ── CC RENDER ──────────────────────────────────────────────────────────────
 function showCCDashboard(bank){
-  document.getElementById(bank+'-upload-section').classList.add('hidden');
   document.getElementById(bank+'-dashboard').style.display='block';
   renderCC(bank);
 }
@@ -361,7 +373,7 @@ function drawGroupedBars(canvasId,stmts,activeIdx,accentCol){
 // ── PAYOFF PLANNER ─────────────────────────────────────────────────────────
 window.setPreset=function(bank,months,doCalc=true){
   document.querySelectorAll('#'+bank+'-planner .preset').forEach(b=>b.classList.remove('active'));
-  try{if(event&&event.target&&event.target.classList)event.target.classList.add('active');}catch(e){}
+  if(event&&event.target)event.target.classList.add('active');
   const now=new Date(),t=new Date(now.getFullYear(),now.getMonth()+months,1);
   document.getElementById(bank+'-planner-date').value=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0');
   if(doCalc)calcPayoff(bank);
@@ -425,10 +437,12 @@ async function loadUpData(){
     upData.transactions=all;
     showAlert('up-alert-load',false);
     document.getElementById('up-pip').classList.add('show');
+    setUpTokenStatus('ok');
     renderUpDashboard();
   }catch(err){
     showAlert('up-alert-load',false);
     showUpConnect();
+    setUpTokenStatus('error',err.message);
     showAlertMsg('up-alert-err','Could not connect: '+err.message);
   }
 }
@@ -1029,8 +1043,26 @@ main{max-width:520px;margin:0 auto;padding:8px 16px 40px}
 .btn-sm.outline:hover{border-color:var(--accent)!important;color:var(--accent)}
 .btn-sm.primary{background:var(--accent);color:#fff}
 
-/* mobile */
-@media(max-width:500px){
+/* ── COMPACT UPLOAD ── */
+.upload-compact{display:flex;align-items:center;gap:8px;background:var(--surface);border:1.5px dashed var(--border);border-radius:12px;padding:10px 14px;margin-bottom:10px;transition:all .15s}
+.upload-compact.drag{border-color:var(--accent);background:var(--accent-pale)}
+.upload-compact-text{font-size:11px;color:var(--muted);flex:1}
+.upload-compact-btn{background:var(--accent-pale);color:var(--accent);border:none;padding:5px 12px;border-radius:8px;font-family:'Syne',sans-serif;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.upload-compact-btn:hover{background:var(--accent);color:#fff}
+
+/* ── UP NOTICE ── */
+.up-notice{display:flex;align-items:center;gap:10px;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:10px 14px;margin-bottom:10px}
+.up-notice span:first-child{font-size:14px;flex-shrink:0}
+.up-notice span:nth-child(2){font-size:11px;color:var(--muted);flex:1;line-height:1.4}
+.up-notice-btn{background:var(--up-pale);color:var(--up);border:none;padding:5px 12px;border-radius:8px;font-family:'Syne',sans-serif;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.up-notice-btn:hover{background:var(--up);color:#fff}
+
+/* ── UP TOKEN STATUS in config ── */
+.up-token-status{font-size:10px;padding:3px 8px;border-radius:6px;font-weight:600;margin-top:4px;display:inline-block}
+.up-token-status.ok{background:var(--good-pale);color:var(--good)}
+.up-token-status.missing{background:var(--warn-pale);color:var(--warn)}
+.up-token-status.error{background:var(--bad-pale);color:var(--bad)}
+
   .kpi-grid.cols3{grid-template-columns:1fr 1fr}
   .kpi-grid.cols3 .kpi:last-child{grid-column:span 2}
   .cc-bal{font-size:34px}
@@ -1083,11 +1115,16 @@ main{max-width:520px;margin:0 auto;padding:8px 16px 40px}
 <main>
   <!-- CONFIG -->
   <div id="config-panel" class="hidden">
-    <div class="config-section">ANZ — Google Sheet sync</div>
-    <div class="config-field"><label class="config-lbl">Apps Script URL</label><input class="config-input" id="script-url" type="text" placeholder="https://script.google.com/macros/s/…/exec"></div>
+    <div class="config-section">Apps Script — PDF parser</div>
+    <div class="config-field"><label class="config-lbl">Script URL</label><input class="config-input" id="script-url" type="text" placeholder="https://script.google.com/macros/s/…/exec"></div>
     <div class="config-field"><label class="config-lbl">Secret token</label><input class="config-input" id="script-secret" type="password" placeholder="Your NEST_SECRET value"></div>
     <div class="config-section">Up Bank — live spending</div>
-    <div class="config-field"><label class="config-lbl">Personal Access Token</label><input class="config-input" id="up-token" type="password" placeholder="up:yeah:…"></div>
+    <div class="config-field">
+      <label class="config-lbl">Personal Access Token</label>
+      <input class="config-input" id="up-token" type="password" placeholder="up:yeah:…">
+      <div id="up-token-status" class="up-token-status" style="display:none"></div>
+      <span style="font-size:10px;color:var(--muted);margin-top:3px">Up app → Settings → API → Personal access token</span>
+    </div>
     <div class="config-foot">
       <span class="config-hint">Settings saved to your account — accessible on all devices.</span>
       <button class="btn-save" onclick="saveConfig()">Save & connect</button>
@@ -1100,11 +1137,10 @@ main{max-width:520px;margin:0 auto;padding:8px 16px 40px}
     <div id="anz-alert-err" class="alert alert-err block"></div>
 
     <div id="anz-upload-section">
-      <div class="upload-zone" id="anz-drop" onclick="document.getElementById('file-input-anz').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event,'anz')">
-        <span class="upload-icon">📄</span>
-        <div class="upload-title">Upload ANZ statement</div>
-        <div class="upload-sub">Drop one or more PDFs — AI reads and categorises each one</div>
-        <button class="btn-upload" onclick="event.stopPropagation();document.getElementById('file-input-anz').click()">Choose PDFs</button>
+      <div id="anz-drop-compact" class="upload-compact" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event,'anz');this.classList.remove('drag')">
+        <span style="font-size:15px;opacity:.5">📄</span>
+        <span class="upload-compact-text">Drop ANZ PDFs here or</span>
+        <button class="upload-compact-btn" onclick="document.getElementById('file-input-anz').click()">Choose files</button>
         <input type="file" id="file-input-anz" accept=".pdf" multiple onchange="handleFiles(this.files,'anz')">
       </div>
     </div>
@@ -1200,11 +1236,10 @@ main{max-width:520px;margin:0 auto;padding:8px 16px 40px}
   <div class="tab-panel" id="panel-wbc">
     <div id="wbc-alert-err" class="alert alert-err block"></div>
     <div id="wbc-upload-section">
-      <div class="upload-zone" id="wbc-drop" onclick="document.getElementById('file-input-wbc').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event,'wbc')">
-        <span class="upload-icon">📄</span>
-        <div class="upload-title">Upload Westpac statement</div>
-        <div class="upload-sub">Drop one or more PDFs — same AI pipeline as ANZ</div>
-        <button class="btn-upload" onclick="event.stopPropagation();document.getElementById('file-input-wbc').click()">Choose PDFs</button>
+      <div id="wbc-drop-compact" class="upload-compact" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event,'wbc');this.classList.remove('drag')">
+        <span style="font-size:15px;opacity:.5">📄</span>
+        <span class="upload-compact-text">Drop Westpac PDFs here or</span>
+        <button class="upload-compact-btn" onclick="document.getElementById('file-input-wbc').click()">Choose files</button>
         <input type="file" id="file-input-wbc" accept=".pdf" multiple onchange="handleFiles(this.files,'wbc')">
       </div>
     </div>
@@ -1288,12 +1323,12 @@ main{max-width:520px;margin:0 auto;padding:8px 16px 40px}
   <div class="tab-panel" id="panel-up">
     <div id="up-alert-load" class="alert alert-up-load"><div class="loader" style="margin:0;gap:4px"><div class="dot" style="background:var(--up)"></div><div class="dot" style="background:var(--up)"></div><div class="dot" style="background:var(--up)"></div></div><span>Fetching from Up…</span></div>
     <div id="up-alert-err" class="alert alert-up-err block"></div>
-    <div id="up-connect" class="connect-box" style="display:none">
-      <div style="font-size:26px;margin-bottom:10px">🟡</div>
-      <div class="connect-title">Connect Up Bank</div>
-      <div class="connect-sub">Paste your personal access token to see live spending, account balances, and track your pay cycle.</div>
-      <div class="connect-steps"><strong>1.</strong> Open the Up app<br><strong>2.</strong> Settings → API → Personal access token<br><strong>3.</strong> Copy token starting with <code>up:yeah:</code><br><strong>4.</strong> Tap ⚙ Configure above</div>
-      <button class="btn-connect" onclick="toggleConfig()">Add Up token</button>
+    <div id="up-connect" style="display:none">
+      <div class="up-notice">
+        <span>🟡</span>
+        <span>Add your Up Bank token in <strong>⚙ Configure</strong> to see live spending</span>
+        <button class="up-notice-btn" onclick="toggleConfig()">Add token</button>
+      </div>
     </div>
     <div id="up-dashboard" style="display:none">
       <!-- Hero -->
@@ -1539,7 +1574,6 @@ function openSheet(){if(sheetURL)window.open(sheetURL,'_blank')}
 
 // ── CC RENDER ─────────────────────────────────────────────────────────────────
 function showCCDashboard(bank){
-  document.getElementById(bank+'-upload-section').classList.add('hidden');
   document.getElementById(bank+'-dashboard').style.display='block';
   renderCC(bank);
 }
