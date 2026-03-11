@@ -706,6 +706,12 @@ let upPrevCycleTx=[];
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 window.onload=async()=>{
+  // One-time migration: clear any pre-multibank merged cache
+  if(!localStorage.getItem('nest_cache_v2')){
+    localStorage.removeItem('nest_cc_anz');
+    localStorage.removeItem('nest_cc_wbc');
+    localStorage.setItem('nest_cache_v2','1');
+  }
   if(scriptURL){
     document.getElementById('script-url').value=scriptURL;
     document.getElementById('script-secret').value=scriptSecret;
@@ -716,7 +722,7 @@ window.onload=async()=>{
   setPreset('wbc',12,false);
   // Load cached data immediately
   ['anz','wbc'].forEach(bank=>{
-    const cached=JSON.parse(localStorage.getItem('nest_cc_'+bank)||'[]');
+    const cached=(JSON.parse(localStorage.getItem('nest_cc_'+bank)||'[]')).filter(s=>!s.bank||s.bank===bank);
     if(cached.length){cc[bank].statements=cached;cc[bank].activeIdx=cached.length-1;showCCDashboard(bank)}
   });
   if(scriptURL) await loadFromSheet();
@@ -758,7 +764,7 @@ async function loadFromSheet(){
     if(res.sheetUrl){sheetURL=res.sheetUrl;localStorage.setItem('nest_sheet_url',sheetURL)}
     // Load both banks from sheet response
     ['anz','wbc'].forEach(bank=>{
-      const stmts=(res['statements_'+bank]||res.statements||[]).filter(s=>!s.bank||s.bank===bank);
+      const stmts=(res['statements_'+bank]||[]).filter(s=>!s.bank||s.bank===bank);
       if(stmts.length){
         cc[bank].statements=stmts.sort((a,b)=>new Date(a.period_start)-new Date(b.period_start));
         cc[bank].activeIdx=cc[bank].statements.length-1;
@@ -770,8 +776,12 @@ async function loadFromSheet(){
     showAlert('anz-alert-load',false);
   }catch(err){
     showAlert('anz-alert-load',false);
-    const cached=JSON.parse(localStorage.getItem('nest_cc_anz')||'[]');
-    if(cached.length){setNav('offline','Offline');showAlertMsg('anz-alert-err','Could not reach Sheet. Showing cached data.')}
+    let anyCached=false;
+    ['anz','wbc'].forEach(bank=>{
+      const cached=(JSON.parse(localStorage.getItem('nest_cc_'+bank)||'[]')).filter(s=>!s.bank||s.bank===bank);
+      if(cached.length){cc[bank].statements=cached;cc[bank].activeIdx=cached.length-1;showCCDashboard(bank);anyCached=true;}
+    });
+    if(anyCached){setNav('offline','Offline');showAlertMsg('anz-alert-err','Could not reach Sheet. Showing cached data.')}
     else{setNav('','Not connected');showAlertMsg('anz-alert-err','Could not connect: '+err.message)}
   }
 }
