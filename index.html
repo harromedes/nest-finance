@@ -462,6 +462,13 @@ function getViewedCycle(){
   const now=new Date();
   const current=getCycle(now);
   if(upViewCycleOffset===0) return current;
+  if(upViewCycleOffset>0){
+    // Future cycles: add months forward from current cycle start
+    const n=upViewCycleOffset;
+    const futureStart=new Date(current.start.getFullYear(),current.start.getMonth()+n,CYCLE_DAY);
+    const futureEnd=new Date(current.start.getFullYear(),current.start.getMonth()+n+1,CYCLE_DAY-1,23,59,59);
+    return{start:futureStart,end:futureEnd};
+  }
   let ref=new Date(current.start.getTime()-86400000);
   for(let i=0;i<Math.abs(upViewCycleOffset)-1;i++) ref=new Date(getCycle(ref).start.getTime()-86400000);
   return getCycle(ref);
@@ -517,12 +524,47 @@ function renderUpDashboard(){
   const cycle=getViewedCycle();
   const now=new Date();
   const isCurrentCycle=upViewCycleOffset===0;
+  const isFutureCycle=upViewCycleOffset>0;
 
   // Cycle nav
   const cycleLabel=MN[cycle.start.getMonth()]+' '+cycle.start.getDate()+' – '+MN[cycle.end.getMonth()]+' '+cycle.end.getDate();
   set('up-cycle-label',cycleLabel);
   document.getElementById('up-cycle-prev').disabled=Math.abs(upViewCycleOffset)>=totalCycles-1;
-  document.getElementById('up-cycle-next').disabled=upViewCycleOffset>=0;
+  document.getElementById('up-cycle-next').disabled=upViewCycleOffset>=3;
+
+  // Future cycle — show placeholder
+  if(isFutureCycle){
+    const daysUntil=Math.round((cycle.start-now)/86400000);
+    const refBudget=getPrevCycleBudget();
+    set('up-eyebrow','Future pay cycle');
+    set('up-remaining',refBudget?fmt(refBudget):'—');
+    document.getElementById('up-remaining-lbl').textContent='reference budget (last cycle)';
+    set('up-prog-start',MN[cycle.start.getMonth()]+' '+cycle.start.getDate());
+    set('up-prog-mid','Starts in '+daysUntil+' day'+(daysUntil!==1?'s':''));
+    set('up-prog-end',MN[cycle.end.getMonth()]+' '+cycle.end.getDate());
+    document.getElementById('up-prog-fill').style.width='0%';
+    document.getElementById('up-chips').innerHTML=`<div class="up-chip neutral">Starts in ${daysUntil} day${daysUntil!==1?'s':''}</div>${refBudget?`<div class="up-chip neutral">${fmt(refBudget)} ref budget</div>`:''}`;
+    const pb=document.getElementById('up-pace');
+    pb.className='pace-banner warn';
+    set('up-pace-icon','📅');
+    set('up-pace-hl','Cycle hasn\'t started yet');
+    set('up-pace-detail',`${MN[cycle.start.getMonth()]} ${cycle.start.getDate()} – ${MN[cycle.end.getMonth()]} ${cycle.end.getDate()}${refBudget?' · Reference: '+fmt(refBudget):''}`);
+    set('up-pace-badge','—');
+    set('up-k-spent','—');set('up-k-spent-sub','');
+    set('up-k-daily','—');set('up-k-daily-sub','');
+    set('up-k-proj',refBudget?fmt(refBudget):'—');set('up-k-proj-sub',refBudget?'based on last cycle':'');
+    set('up-k-days','30');set('up-k-days-sub','day cycle');
+    document.getElementById('up-acct-cards').style.display='none';
+    document.getElementById('up-cat-bars').innerHTML='<div style="font-size:11px;color:var(--muted)">No data yet — cycle starts in '+daysUntil+' day'+(daysUntil!==1?'s':'')+'</div>';
+    set('up-tx-count','0 transactions');
+    document.getElementById('up-tx-list').innerHTML='<div style="font-size:11px;color:var(--muted);padding:4px 0">Cycle starts in '+daysUntil+' day'+(daysUntil!==1?'s':'')+'</div>';
+    // Empty week view
+    const weeks=getCycleWeeks(cycle);
+    document.getElementById('up-week-tabs').innerHTML=weeks.map((_,i)=>`<button class="week-tab${i===upActiveWeek?' active':''}" onclick="selectUpWeek(${i})">W${i+1}</button>`).join('');
+    document.getElementById('up-week-days').innerHTML=[0,1,2,3,4,5,6].map(d=>`<div class="week-day out-of-cycle"><div class="day-lbl">${DAY_NAMES[d]}</div><div class="day-bar-wrap"></div><div class="day-amt">—</div></div>`).join('');
+    document.getElementById('up-day-detail').style.display='none';
+    return;
+  }
 
   // Spending data for this cycle
   const spendTx=upData.transactions.filter(t=>parseFloat(t.attributes.amount.value)<0&&t.attributes.isCategorizable!==false);
@@ -614,7 +656,7 @@ function renderUpDashboard(){
 
 window.navUpCycle=function(dir){
   const allCycles=getAllCycles();
-  upViewCycleOffset=Math.max(-(allCycles.length-1),Math.min(0,upViewCycleOffset+dir));
+  upViewCycleOffset=Math.max(-(allCycles.length-1),Math.min(3,upViewCycleOffset+dir));
   upActiveWeek=0;
   upSelectedDay=null;
   renderUpDashboard();
