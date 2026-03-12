@@ -493,16 +493,19 @@ function getAllCycles(){
   return cycles; // index 0 = current, index n = oldest
 }
 
-// Returns the 4 Mon-Sun weeks that cover the cycle
+// Returns all Mon-Sun weeks needed to fully cover the cycle (4 or 5)
 function getCycleWeeks(cycle){
   const weeks=[];
-  // Find the Monday of the week containing cycle.start
   const dow=cycle.start.getDay()===0?6:cycle.start.getDay()-1;
   const firstMon=new Date(cycle.start);firstMon.setDate(cycle.start.getDate()-dow);firstMon.setHours(0,0,0,0);
-  for(let i=0;i<4;i++){
+  let i=0;
+  while(true){
     const mon=new Date(firstMon);mon.setDate(firstMon.getDate()+i*7);
     const sun=new Date(mon);sun.setDate(mon.getDate()+6);sun.setHours(23,59,59,999);
     weeks.push({start:mon,end:sun});
+    if(sun>=cycle.end) break; // this week covers the cycle end
+    i++;
+    if(i>5) break; // safety cap
   }
   return weeks;
 }
@@ -686,7 +689,9 @@ function renderUpDashboard(){
 window.navUpCycle=function(dir){
   const allCycles=getAllCycles();
   upViewCycleOffset=Math.max(-(allCycles.length-1),Math.min(3,upViewCycleOffset+dir));
-  upActiveWeek=0;
+  const newCycle=getViewedCycle();
+  const newWeekCount=getCycleWeeks(newCycle).length;
+  upActiveWeek=Math.min(upActiveWeek,newWeekCount-1);
   upSelectedDay=null;
   renderUpDashboard();
 };
