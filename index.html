@@ -264,6 +264,38 @@ function renderCC(bank){
 
   drawCCCharts(bank);
 
+  // Payment history
+  const pmtEl=document.getElementById(bank+'-pmt-history');
+  if(pmtEl){
+    const pmts=[...stmts].reverse().filter(st=>st.total_payments>0);
+    pmtEl.innerHTML=pmts.length?pmts.map(st=>{
+      const p=stmts[stmts.indexOf(st)-1];
+      const diff=p?st.total_payments-p.total_payments:null;
+      const col=diff===null?'':diff>0?'var(--good)':'var(--bad)';
+      const arrow=diff===null?'':diff>0?'↑':'↓';
+      return`<div class="pmt-row"><div class="pmt-period">${shortLabel(st)}</div><div class="pmt-bar-wrap"><div class="pmt-bar" style="width:${(st.total_payments/Math.max(...stmts.map(x=>x.total_payments||0))*100).toFixed(1)}%"></div></div><div class="pmt-amt">${fmt(st.total_payments)}</div>${diff!==null?`<div class="pmt-delta" style="color:${col}">${arrow}${fmt(Math.abs(diff))}</div>`:'<div class="pmt-delta"></div>'}</div>`;
+    }).join(''):'<div style="font-size:11px;color:var(--muted);padding:4px 0">No payment data yet</div>';
+  }
+
+  // Interest total
+  const totalInt=stmts.reduce((s,st)=>s+st.interest,0);
+  const intEl=document.getElementById(bank+'-interest-total');
+  if(intEl){
+    intEl.innerHTML=`<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:10px">
+      <span style="font-family:'Syne',sans-serif;font-size:26px;font-weight:800;color:var(--bad)">${fmt(totalInt)}</span>
+      <span style="font-size:11px;color:var(--muted)">total interest across ${stmts.length} period${stmts.length!==1?'s':''}</span>
+    </div>`+
+    stmts.filter(st=>st.interest>0).reverse().map(st=>`
+      <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--bg)">
+        <div style="font-size:11px;color:var(--muted);width:60px;flex-shrink:0">${shortLabel(st)}</div>
+        <div style="flex:1;height:5px;background:var(--bg);border-radius:3px;overflow:hidden"><div style="height:100%;border-radius:3px;background:var(--bad);width:${(st.interest/Math.max(...stmts.map(x=>x.interest||0))*100).toFixed(1)}%"></div></div>
+        <div style="font-size:11px;font-weight:600;color:var(--bad);width:52px;text-align:right">${fmt(st.interest)}</div>
+      </div>`).join('');
+  }
+
+  // Payoff trajectory (visual line)
+  renderPayoffTrajectory(bank);
+
   document.getElementById(bank+'-hist-tbody').innerHTML=stmts.map((st,i)=>{
     const p=stmts[i-1];const d=st.closing_balance-st.opening_balance;
     let pill='<span class="trend-pill pill-neu">—</span>';
@@ -293,15 +325,105 @@ function renderCC(bank){
   renderCCTx(bank,'');
 }
 
+function renderPayoffTrajectory(bank){
+  const canvas=document.getElementById(bank+'-traj-canvas');
+  const stmts=cc[bank].statements;
+  if(!canvas||!stmts.length)return;
+  const wrap=canvas.parentElement;const dpr=window.devicePixelRatio||1;
+  const W=wrap.offsetWidth||420,H=120;
+  canvas.width=W*dpr;canvas.height=H*dpr;canvas.style.width=W+'px';canvas.style.height=H+'px';
+  const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,W,H);
+  const accentCol=bank==='wbc'?'#D84343':'#6355D8';
+  const accentPale=bank==='wbc'?'rgba(216,67,67,0.10)':'rgba(99,85,216,0.10)';
+  const csGrid=getComputedStyle(document.body).getPropertyValue('--chart-grid').trim()||'#ECEAF4';
+  const csLbl=getComputedStyle(document.body).getPropertyValue('--chart-label').trim()||'#A8A6C0';
+
+  // Historical actual points
+  const hist=stmts.map(s=>s.closing_balance);
+  const latest=stmts[stmts.length-1];
+
+  // Project forward using avg payment rate
+  const rp=stmts.slice(-3).map(s=>s.total_payments).filter(p=>p>0);
+  const avgPmt=rp.length?rp.reduce((a,b)=>a+b,0)/rp.length:0;
+  const mr=Math.pow(1+DAILY_RATE,30)-1;
+  const proj=[];let bal=latest.closing_balance;
+  if(avgPmt>0){for(let i=0;i<24;i++){bal=Math.max(0,bal+bal*mr-avgPmt);proj.push(bal);if(bal<=0)break;}}
+
+  const allPts=[...hist,...proj];
+  const maxV=Math.max(...allPts)*1.15||1;
+  const n=allPts.length;
+  const pad={t:14,r:12,b:22,l:42};
+  const cW=W-pad.l-pad.r,cH=H-pad.t-pad.b;
+  const xP=i=>pad.l+(i/(n-1))*cW;
+  const yP=v=>pad.t+cH-(Math.min(v,maxV)/maxV)*cH;
+
+  ctx.strokeStyle=csGrid;ctx.lineWidth=1;
+  for(let i=0;i<=3;i++){const y=pad.t+(i/3)*cH;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(pad.l+cW,y);ctx.stroke();ctx.fillStyle=csLbl;ctx.font='9px DM Sans';ctx.textAlign='right';ctx.fillText('$'+Math.round((maxV-(i/3)*maxV)/1000)+'k',pad.l-4,y+3)}
+
+  // Actual line
+  ctx.beginPath();ctx.strokeStyle=accentCol;ctx.lineWidth=2.5;ctx.lineJoin='round';
+  hist.forEach((v,i)=>i===0?ctx.moveTo(xP(i),yP(v)):ctx.lineTo(xP(i),yP(v)));ctx.stroke();
+
+  // Projected dashed line
+  if(proj.length>0){
+    ctx.beginPath();ctx.setLineDash([5,4]);ctx.strokeStyle=accentCol+'88';ctx.lineWidth=2;
+    ctx.moveTo(xP(hist.length-1),yP(hist[hist.length-1]));
+    proj.forEach((v,i)=>ctx.lineTo(xP(hist.length+i),yP(v)));ctx.stroke();ctx.setLineDash([]);
+    // Zero line label
+    if(proj[proj.length-1]<=0){
+      const zeroI=hist.length+proj.length-1;
+      ctx.fillStyle=getComputedStyle(document.body).getPropertyValue('--good').trim()||'#2D6A4F';
+      ctx.font='bold 9px DM Sans';ctx.textAlign='center';
+      ctx.fillText('DEBT FREE',xP(zeroI),yP(0)-8);
+    }
+  }
+
+  // Dots on history
+  hist.forEach((v,i)=>drawDot(ctx,xP(i),yP(v),accentCol,i===hist.length-1?5:2.5,i===hist.length-1));
+  const lx=Math.min(Math.max(xP(hist.length-1),pad.l+20),pad.l+cW-20);
+  ctx.fillStyle=accentCol;ctx.font='bold 9px DM Sans';ctx.textAlign='center';
+  ctx.fillText(fmt(latest.closing_balance),lx,Math.max(pad.t+10,yP(latest.closing_balance)-7));
+
+  // Legend
+  ctx.setLineDash([]);
+  const textCol=getComputedStyle(document.body).getPropertyValue('--muted').trim()||'#A8A6C0';
+  ctx.fillStyle=textCol;ctx.font='9px DM Sans';ctx.textAlign='left';
+  ctx.fillText('— actual',pad.l,H-4);
+  ctx.setLineDash([4,3]);ctx.strokeStyle=accentCol+'88';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(pad.l+50,H-7);ctx.lineTo(pad.l+62,H-7);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle=textCol;ctx.fillText('projected (avg pmt)',pad.l+65,H-4);
+}
+
 function renderCCTx(bank,query){
   const s=cc[bank].statements[cc[bank].activeIdx];if(!s)return;
-  const txs=query?s.transactions.filter(t=>t.merchant.toLowerCase().includes(query.toLowerCase())||t.category.toLowerCase().includes(query.toLowerCase())):s.transactions;
+  const txs=query
+    ?s.transactions.filter(t=>t.merchant.toLowerCase().includes(query.toLowerCase())||t.category.toLowerCase().includes(query.toLowerCase()))
+    :[...s.transactions];
+  txs.sort((a,b)=>new Date(b.date)-new Date(a.date));
   set(bank+'-tx-count',txs.length+' transactions');
-  document.getElementById(bank+'-tx-list').innerHTML=txs.map(t=>`
-    <div class="tx-row"><div class="tx-icon">${catEmoji(t.category)}</div>
-    <div style="flex:1;min-width:0"><div class="tx-name">${t.merchant}</div>
-    <div class="tx-meta">${t.date} · <span class="tx-tag">${t.category}</span></div></div>
-    <div class="tx-amt">${fmt(t.amount)}</div></div>`).join('');
+
+  // Group by date
+  const byDate={};
+  txs.forEach(t=>{
+    const key=t.date||'Unknown';
+    if(!byDate[key])byDate[key]=[];
+    byDate[key].push(t);
+  });
+
+  document.getElementById(bank+'-tx-list').innerHTML=Object.entries(byDate).map(([date,dayTxs])=>{
+    const d=new Date(date+'T12:00:00');
+    const label=isNaN(d)?date:d.toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short'});
+    const dayTotal=dayTxs.reduce((s,t)=>s+t.amount,0);
+    const rows=dayTxs.map(t=>`
+      <div class="tx-row"><div class="tx-icon">${catEmoji(t.category)}</div>
+      <div style="flex:1;min-width:0"><div class="tx-name">${t.merchant}</div>
+      <div class="tx-meta"><span class="tx-tag">${t.category}</span></div></div>
+      <div class="tx-amt">${fmt(t.amount)}</div></div>`).join('');
+    return`<div class="tx-date-group">
+      <div class="tx-date-header"><span class="tx-date-lbl">${label}</span><span class="tx-date-total">${fmt(dayTotal)}</span></div>
+      ${rows}
+    </div>`;
+  }).join('');
 }
 window.filterTx=function(bank){renderCCTx(bank,document.getElementById(bank+'-tx-search').value)};
 window.switchPeriod=function(bank,val){cc[bank].activeIdx=parseInt(val);renderCC(bank)};
@@ -311,50 +433,47 @@ function drawCCCharts(bank){
   const stmts=cc[bank].statements;if(!stmts.length)return;
   const accentCol=bank==='wbc'?'#D84343':'#6355D8';
   const accentPale=bank==='wbc'?'rgba(216,67,67,0.08)':'rgba(99,85,216,0.07)';
-  drawBalanceLine(bank+'-chart-bal',stmts,cc[bank].activeIdx,accentCol,accentPale);
-  drawGroupedBars(bank+'-chart-bars',stmts,cc[bank].activeIdx,accentCol);
+  drawDebtProgress(bank,stmts);
+  drawPeriodComparison(bank+'-chart-compare',stmts,cc[bank].activeIdx,accentCol);
 }
 
-function drawBalanceLine(canvasId,stmts,activeIdx,accentCol,accentPale){
+function drawDebtProgress(bank,stmts){
+  const el=document.getElementById(bank+'-debt-progress');if(!el)return;
+  const peak=Math.max(...stmts.map(s=>s.closing_balance));
+  const current=stmts[stmts.length-1].closing_balance;
+  const paid=peak-current;
+  const pct=Math.min(100,(paid/peak*100));
+  const accentCol=bank==='wbc'?'#D84343':'#6355D8';
+  el.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:8px">
+      <div><div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">Current balance</div>
+      <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:var(--bad)">${fmt(current)}</div></div>
+      <div style="text-align:right"><div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">Peak</div>
+      <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--muted)">${fmt(peak)}</div></div>
+    </div>
+    <div style="position:relative;height:10px;background:var(--bg);border-radius:5px;overflow:hidden;margin-bottom:6px">
+      <div style="position:absolute;left:0;top:0;height:100%;width:${(100-pct).toFixed(1)}%;background:${accentCol};border-radius:5px;transition:width .6s"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted)">
+      <span style="color:var(--good);font-weight:600">${fmt(paid)} paid off (${pct.toFixed(0)}%)</span>
+      <span>${fmt(current)} remaining</span>
+    </div>`;
+}
+
+function drawPeriodComparison(canvasId,stmts,activeIdx,accentCol){
   const canvas=document.getElementById(canvasId);if(!canvas||!stmts.length)return;
   const wrap=canvas.parentElement;const dpr=window.devicePixelRatio||1;
   const W=wrap.offsetWidth||420,H=130;
   canvas.width=W*dpr;canvas.height=H*dpr;canvas.style.width=W+'px';canvas.style.height=H+'px';
   const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,W,H);
-  const n=stmts.length,pad={t:16,r:12,b:22,l:42};
-  const cW=W-pad.l-pad.r,cH=H-pad.t-pad.b;
-  const maxV=Math.max(...stmts.map(s=>s.closing_balance))*1.18||1;
-  const xP=i=>pad.l+(n===1?cW/2:(i/(n-1))*cW);
-  const yP=v=>pad.t+cH-(Math.min(v,maxV)/maxV)*cH;
-  ctx.strokeStyle='#ECEAF4';ctx.lineWidth=1;
-  for(let i=0;i<=3;i++){const y=pad.t+(i/3)*cH;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(pad.l+cW,y);ctx.stroke();ctx.fillStyle='#A8A6C0';ctx.font='9px DM Sans';ctx.textAlign='right';ctx.fillText('$'+Math.round((maxV-(i/3)*maxV)/1000)+'k',pad.l-4,y+3)}
-  if(n>1){const hw=Math.max(12,cW/(n-1)*.45);ctx.fillStyle=accentPale.replace('0.07','0.12').replace('0.08','0.1');rr(ctx,xP(activeIdx)-hw/2,pad.t,hw,cH,3);ctx.fill()}
-  ctx.fillStyle='#A8A6C0';ctx.font='9px DM Sans';ctx.textAlign='center';
-  const skip=Math.ceil(n/Math.floor(cW/32));
-  stmts.forEach((st,i)=>{if(i%skip!==0&&i!==n-1)return;ctx.fillText(shortLabel(st),xP(i),H-3)});
-  ctx.beginPath();ctx.fillStyle=accentPale.replace('0.07','0.12').replace('0.08','0.1');
-  stmts.forEach((s,i)=>i===0?ctx.moveTo(xP(i),yP(s.closing_balance)):ctx.lineTo(xP(i),yP(s.closing_balance)));
-  ctx.lineTo(xP(n-1),pad.t+cH);ctx.lineTo(xP(0),pad.t+cH);ctx.closePath();ctx.fill();
-  ctx.beginPath();ctx.strokeStyle=accentCol;ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.lineCap='round';
-  stmts.forEach((s,i)=>i===0?ctx.moveTo(xP(i),yP(s.closing_balance)):ctx.lineTo(xP(i),yP(s.closing_balance)));ctx.stroke();
-  stmts.forEach((s,i)=>drawDot(ctx,xP(i),yP(s.closing_balance),accentCol,i===activeIdx?5:3,i===activeIdx));
-  const as=stmts[activeIdx];const lx=Math.min(Math.max(xP(activeIdx),pad.l+18),pad.l+cW-18);
-  ctx.fillStyle=accentCol;ctx.font='bold 9px DM Sans';ctx.textAlign='center';
-  ctx.fillText(fmt(as.closing_balance),lx,Math.max(pad.t+8,yP(as.closing_balance)-7));
-}
-
-function drawGroupedBars(canvasId,stmts,activeIdx,accentCol){
-  const canvas=document.getElementById(canvasId);if(!canvas||!stmts.length)return;
-  const wrap=canvas.parentElement;const dpr=window.devicePixelRatio||1;
-  const W=wrap.offsetWidth||420,H=120;
-  canvas.width=W*dpr;canvas.height=H*dpr;canvas.style.width=W+'px';canvas.style.height=H+'px';
-  const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,W,H);
   const slice=stmts.slice(-6),n=slice.length;if(!n)return;
+  const csGrid=getComputedStyle(document.body).getPropertyValue('--chart-grid').trim()||'#ECEAF4';
+  const csLbl=getComputedStyle(document.body).getPropertyValue('--chart-label').trim()||'#A8A6C0';
   const pad={t:12,r:10,b:22,l:42};const cW=W-pad.l-pad.r,cH=H-pad.t-pad.b;
-  const maxV=Math.max(...slice.map(s=>Math.max(s.total_debits,s.total_payments)))*1.2||1;
+  const maxV=Math.max(...slice.map(s=>Math.max(s.total_debits,s.total_payments,s.interest*5)))*1.25||1;
   const yP=v=>pad.t+cH-(Math.min(v,maxV)/maxV)*cH;
-  ctx.strokeStyle='#ECEAF4';ctx.lineWidth=1;
-  for(let i=0;i<=3;i++){const y=pad.t+(i/3)*cH;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(pad.l+cW,y);ctx.stroke();ctx.fillStyle='#A8A6C0';ctx.font='9px DM Sans';ctx.textAlign='right';ctx.fillText('$'+Math.round((maxV-(i/3)*maxV)/1000)+'k',pad.l-4,y+3)}
+  ctx.strokeStyle=csGrid;ctx.lineWidth=1;
+  for(let i=0;i<=3;i++){const y=pad.t+(i/3)*cH;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(pad.l+cW,y);ctx.stroke();ctx.fillStyle=csLbl;ctx.font='9px DM Sans';ctx.textAlign='right';ctx.fillText('$'+Math.round((maxV-(i/3)*maxV)/1000)+'k',pad.l-4,y+3)}
   const gW=cW/n,bW=Math.min(16,gW*.22),gap=2;
   slice.forEach((s,i)=>{
     const gx=pad.l+i*gW+gW/2,isA=stmts.indexOf(s)===activeIdx,base=pad.t+cH;
@@ -362,7 +481,9 @@ function drawGroupedBars(canvasId,stmts,activeIdx,accentCol){
     ctx.fillStyle=accentCol+(isA?'':'99');rbTop(ctx,gx-bW*1.5-gap,yP(s.total_debits),bW,base-yP(s.total_debits),3);ctx.fill();
     ctx.fillStyle='#2D6A4F'+(isA?'':'99');rbTop(ctx,gx-bW/2,yP(s.total_payments),bW,base-yP(s.total_payments),3);ctx.fill();
     const iS=s.interest*5;ctx.fillStyle='#B07D2A'+(isA?'':'99');rbTop(ctx,gx+bW/2+gap,yP(iS),bW,base-yP(iS),3);ctx.fill();
-    ctx.fillStyle=isA?'#1A1830':'#A8A6C0';ctx.font=isA?'bold 9px DM Sans':'9px DM Sans';ctx.textAlign='center';ctx.fillText(shortLabel(s),gx,H-3);
+    ctx.fillStyle=isA?'var(--text)':csLbl;ctx.font=isA?'bold 9px DM Sans':'9px DM Sans';ctx.textAlign='center';
+    ctx.fillStyle=isA?getComputedStyle(document.body).getPropertyValue('--text').trim()||'#1A1830':csLbl;
+    ctx.fillText(shortLabel(s),gx,H-3);
   });
 }
 
@@ -722,6 +843,25 @@ window.saveBudgetEdit=async function(){
 };
 window.budgetEditKey=function(e){if(e.key==='Enter')saveBudgetEdit();};
 
+// ── DARK MODE ──────────────────────────────────────────────────────────────
+function applyDarkMode(on){
+  document.body.classList.toggle('dark',on);
+  const t=document.getElementById('dark-toggle');
+  const k=document.getElementById('dark-toggle-knob');
+  if(t)t.style.background=on?'var(--accent)':'var(--border)';
+  if(k)k.style.transform=on?'translateX(20px)':'translateX(0)';
+  localStorage.setItem('nest-dark',on?'1':'0');
+}
+window.toggleDarkMode=function(){
+  const on=!document.body.classList.contains('dark');
+  applyDarkMode(on);
+  // Redraw charts with new colours
+  if(currentTab==='anz'&&cc.anz.statements.length)drawCCCharts('anz');
+  if(currentTab==='wbc'&&cc.wbc.statements.length)drawCCCharts('wbc');
+};
+// Init from localStorage on load
+(function(){applyDarkMode(localStorage.getItem('nest-dark')==='1');})();
+
 // ── CYCLE WEEK VIEW ────────────────────────────────────────────────────────
 function renderCycleWeeks(cycle,cycleTx){
   const weeks=getCycleWeeks(cycle);
@@ -899,6 +1039,8 @@ function upTxEmoji(desc){if(!desc)return'💳';const d=desc.toLowerCase();if(d.i
 window.addEventListener('resize',()=>{
   if(currentTab==='anz'&&cc.anz.statements.length)drawCCCharts('anz');
   if(currentTab==='wbc'&&cc.wbc.statements.length)drawCCCharts('wbc');
+  if(currentTab==='anz'&&cc.anz.statements.length)renderPayoffTrajectory('anz');
+  if(currentTab==='wbc'&&cc.wbc.statements.length)renderPayoffTrajectory('wbc');
 });
 </script>
 <style>
@@ -910,6 +1052,17 @@ window.addEventListener('resize',()=>{
   --warn:#B07D2A;--warn-pale:#FFF8E6;--warn-light:#FFD080;
   --up:#E06000;--up-pale:#FFF1E6;
   --ink:#1A1830;
+  --chart-grid:#ECEAF4;--chart-label:#A8A6C0;
+}
+body.dark{
+  --bg:#13121E;--surface:#1E1C2E;--border:#2E2C42;--text:#E8E6F8;--muted:#6A6890;
+  --accent:#8B7FFF;--accent-pale:#2A2550;--accent-mid:#7A6EEE;--accent-light:#5A4FCC;
+  --good:#4CAF7D;--good-pale:#1A3028;--good-mid:#4CAF7D;
+  --bad:#E05555;--bad-pale:#3A1A1A;
+  --warn:#D4A030;--warn-pale:#2E2510;--warn-light:#D4A030;
+  --up:#FF8030;--up-pale:#2E1A08;
+  --ink:#E8E6F8;
+  --chart-grid:#2A2840;--chart-label:#6A6890;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{font-size:14px;-webkit-text-size-adjust:100%}
@@ -1204,7 +1357,30 @@ main{max-width:520px;margin:0 auto;padding:8px 16px 40px}
 .up-token-status.ok{background:var(--good-pale);color:var(--good)}
 .up-token-status.missing{background:var(--warn-pale);color:var(--warn)}
 .up-token-status.error{background:var(--bad-pale);color:var(--bad)}
-@media(max-width:480px){
+/* Payment history */
+.pmt-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bg)}
+.pmt-row:last-child{border-bottom:none}
+.pmt-period{font-size:11px;color:var(--muted);width:52px;flex-shrink:0}
+.pmt-bar-wrap{flex:1;height:5px;background:var(--bg);border-radius:3px;overflow:hidden}
+.pmt-bar{height:100%;border-radius:3px;background:var(--good)}
+.pmt-amt{font-size:11px;font-weight:600;color:var(--good);width:52px;text-align:right;flex-shrink:0}
+.pmt-delta{font-size:10px;width:52px;text-align:right;flex-shrink:0;font-weight:600}
+/* TX date groups */
+.tx-date-group{margin-bottom:4px}
+.tx-date-header{display:flex;align-items:center;justify-content:space-between;padding:8px 0 5px;border-bottom:1px solid var(--border)}
+.tx-date-lbl{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.tx-date-total{font-size:11px;font-weight:700;color:var(--text)}
+/* Dark mode surface overrides */
+body.dark .card{box-shadow:0 1px 6px rgba(0,0,0,0.3)}
+body.dark .kpi{box-shadow:0 1px 4px rgba(0,0,0,0.25)}
+body.dark .planner{border-color:var(--accent-pale)}
+body.dark .planner-input{background:var(--surface);border-color:var(--border);color:var(--text)}
+body.dark .preset{background:var(--surface);border-color:var(--border);color:var(--muted)}
+body.dark .period-select{background:var(--surface);border-color:var(--border);color:var(--text)}
+body.dark .tx-search{background:var(--surface);border-color:var(--border)}
+body.dark .hist-table tr.active-row td{background:var(--bg)}
+body.dark nav{border-bottom:1px solid var(--border)}
+body.dark .tab-btn.active{box-shadow:0 2px 10px rgba(0,0,0,0.3)}
   .kpi-grid.cols3{grid-template-columns:1fr 1fr}
   .kpi-grid.cols3 .kpi:last-child{grid-column:span 2}
   .cc-bal{font-size:34px}
@@ -1266,6 +1442,13 @@ main{max-width:520px;margin:0 auto;padding:8px 16px 40px}
       <div id="up-token-status" class="up-token-status" style="display:none"></div>
       <span style="font-size:10px;color:var(--muted);margin-top:3px">Up app → Settings → API → Personal access token</span>
     </div>
+    <div class="config-section">Display</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0 10px">
+      <span style="font-size:12px;color:var(--text);font-weight:500">Dark mode</span>
+      <button id="dark-toggle" onclick="toggleDarkMode()" style="width:44px;height:24px;border-radius:12px;border:none;cursor:pointer;position:relative;transition:background .2s;background:var(--border)">
+        <span id="dark-toggle-knob" style="position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .2s;display:block"></span>
+      </button>
+    </div>
     <div class="config-foot">
       <span class="config-hint">Settings saved to your account — accessible on all devices.</span>
       <button class="btn-save" onclick="saveConfig()">Save & connect</button>
@@ -1309,17 +1492,29 @@ main{max-width:520px;margin:0 auto;padding:8px 16px 40px}
         <div class="kpi"><div class="kpi-label">Interest</div><div class="kpi-value" id="anz-k-int">—</div><div class="kpi-sub" id="anz-k-int-sub"></div></div>
       </div>
       <div class="card">
-        <div class="card-head"><span class="card-title">Balance history</span><span class="card-badge" id="anz-hist-lbl"></span></div>
-        <canvas id="anz-chart-bal" style="width:100%;height:130px;display:block"></canvas>
+        <div class="card-head"><span class="card-title">Debt progress</span></div>
+        <div id="anz-debt-progress"></div>
       </div>
       <div class="card">
-        <div class="card-head"><span class="card-title">Last 6 months</span><span class="card-badge">interest ×5</span></div>
-        <canvas id="anz-chart-bars" style="width:100%;height:120px;display:block"></canvas>
+        <div class="card-head"><span class="card-title">Period comparison</span><span class="card-badge">last 6 periods</span></div>
+        <canvas id="anz-chart-compare" style="width:100%;height:130px;display:block"></canvas>
         <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap">
           <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><div style="width:9px;height:7px;border-radius:2px;background:var(--accent)"></div>Spent</div>
           <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><div style="width:9px;height:7px;border-radius:2px;background:var(--good)"></div>Paid</div>
-          <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><div style="width:9px;height:7px;border-radius:2px;background:var(--warn)"></div>Interest</div>
+          <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><div style="width:9px;height:7px;border-radius:2px;background:var(--warn)"></div>Interest ×5</div>
         </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title">Payoff trajectory</span><span class="card-badge" style="color:var(--good)">projected</span></div>
+        <canvas id="anz-traj-canvas" style="width:100%;height:120px;display:block"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title">Payment history</span></div>
+        <div id="anz-pmt-history"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title">Interest paid</span></div>
+        <div id="anz-interest-total"></div>
       </div>
       <div class="card">
         <div class="card-head"><span class="card-title">All periods</span></div>
@@ -1384,6 +1579,7 @@ main{max-width:520px;margin:0 auto;padding:8px 16px 40px}
         </div>
         <button class="btn-sm outline" onclick="showUploadSection('wbc')">+ Upload</button>
       </div>
+
       <div class="cc-hero westpac">
         <div class="cc-eyebrow" id="wbc-eyebrow">Westpac Credit Card</div>
         <div class="cc-bal" id="wbc-bal">—</div>
@@ -1396,32 +1592,44 @@ main{max-width:520px;margin:0 auto;padding:8px 16px 40px}
         <div class="kpi"><div class="kpi-label">Interest</div><div class="kpi-value" id="wbc-k-int">—</div><div class="kpi-sub" id="wbc-k-int-sub"></div></div>
       </div>
       <div class="card">
-        <div class="card-head"><span class="card-title">Balance history</span><span class="card-badge" id="wbc-hist-lbl"></span></div>
-        <canvas id="wbc-chart-bal" style="width:100%;height:130px;display:block"></canvas>
+        <div class="card-head"><span class="card-title">Debt progress</span></div>
+        <div id="wbc-debt-progress"></div>
       </div>
       <div class="card">
-        <div class="card-head"><span class="card-title">Last 6 months</span><span class="card-badge">interest ×5</span></div>
-        <canvas id="wbc-chart-bars" style="width:100%;height:120px;display:block"></canvas>
+        <div class="card-head"><span class="card-title">Period comparison</span><span class="card-badge">last 6 periods</span></div>
+        <canvas id="wbc-chart-compare" style="width:100%;height:130px;display:block"></canvas>
         <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap">
           <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><div style="width:9px;height:7px;border-radius:2px;background:#D84343"></div>Spent</div>
           <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><div style="width:9px;height:7px;border-radius:2px;background:var(--good)"></div>Paid</div>
-          <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><div style="width:9px;height:7px;border-radius:2px;background:var(--warn)"></div>Interest</div>
+          <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)"><div style="width:9px;height:7px;border-radius:2px;background:var(--warn)"></div>Interest ×5</div>
         </div>
       </div>
       <div class="card">
-        <div class="card-head"><span class="card-title">All periods</span></div>
+        <div class="card-head"><span class="card-title">Payoff trajectory</span><span class="card-badge" style="color:var(--good)">projected</span></div>
+        <canvas id="wbc-traj-canvas" style="width:100%;height:120px;display:block"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title">Payment history</span></div>
+        <div id="wbc-pmt-history"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title">Interest paid</span></div>
+        <div id="wbc-interest-total"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title">All periods</span><span class="card-badge" id="wbc-hist-lbl"></span></div>
         <table class="hist-table"><thead><tr><th>Period</th><th>Spent</th><th>Paid</th><th>Trend</th></tr></thead><tbody id="wbc-hist-tbody"></tbody></table>
       </div>
-      <div class="planner" style="background:#FFF0F0;border-color:#F0C0C0" id="wbc-planner">
-        <div class="planner-head"><span class="planner-title" style="color:#D84343">Payoff planner</span><span class="planner-from" id="wbc-planner-from"></span></div>
+      <div class="planner" id="wbc-planner">
+        <div class="planner-head"><span class="planner-title">Payoff planner</span><span class="planner-from" id="wbc-planner-from"></span></div>
         <div class="planner-controls">
           <span class="planner-lbl">Debt-free by</span>
-          <input type="month" class="planner-input" id="wbc-planner-date" onchange="calcPayoff('wbc')" style="border-color:#F0C0C0">
+          <input type="month" class="planner-input" id="wbc-planner-date" onchange="calcPayoff('wbc')">
           <div class="planner-presets">
-            <button class="preset" onclick="setPreset('wbc',6,this)" style="border-color:#F0C0C0">6 mo</button>
-            <button class="preset" onclick="setPreset('wbc',12,this)" style="border-color:#F0C0C0">1 yr</button>
-            <button class="preset" onclick="setPreset('wbc',18,this)" style="border-color:#F0C0C0">18 mo</button>
-            <button class="preset" onclick="setPreset('wbc',24,this)" style="border-color:#F0C0C0">2 yr</button>
+            <button class="preset" onclick="setPreset('wbc',6,this)">6 mo</button>
+            <button class="preset" onclick="setPreset('wbc',12,this)">1 yr</button>
+            <button class="preset" onclick="setPreset('wbc',18,this)">18 mo</button>
+            <button class="preset" onclick="setPreset('wbc',24,this)">2 yr</button>
           </div>
         </div>
         <div class="planner-result" id="wbc-planner-result">
@@ -1429,7 +1637,7 @@ main{max-width:520px;margin:0 auto;padding:8px 16px 40px}
           <div class="planner-stats" id="wbc-planner-stats"></div>
         </div>
         <div class="proj-wrap" id="wbc-proj-wrap" style="display:none">
-          <table class="proj-table" style="background:#FFF8F8"><thead><tr><th>Month</th><th>Payment</th><th>Interest</th><th>Balance</th><th class="proj-bar-cell"></th></tr></thead><tbody id="wbc-proj-tbody"></tbody></table>
+          <table class="proj-table"><thead><tr><th>Month</th><th>Payment</th><th>Interest</th><th>Balance</th><th class="proj-bar-cell"></th></tr></thead><tbody id="wbc-proj-tbody"></tbody></table>
         </div>
       </div>
       <div class="card">
