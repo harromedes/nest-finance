@@ -1137,6 +1137,24 @@ window.recalcPlanner=function(){
     });
   }
 
+  // Cap suggestions so they never exceed the payslip — scale proportionally
+  const suggestedTotal=allocations.reduce((s,a)=>s+a.suggested,0);
+  if(suggestedTotal>payslip){
+    const scale=payslip/suggestedTotal;
+    allocations.forEach(a=>{
+      // Rent is sacred — don't scale it
+      if(!a.isRent) a.suggested=Math.round(a.suggested*scale/10)*10;
+    });
+    // Re-check after rent protection — if still over, scale debt items down
+    const postRentTotal=allocations.reduce((s,a)=>s+a.suggested,0);
+    if(postRentTotal>payslip){
+      const overflow=postRentTotal-payslip;
+      const scalable=allocations.filter(a=>!a.isRent);
+      const scalableTotal=scalable.reduce((s,a)=>s+a.suggested,0)||1;
+      scalable.forEach(a=>{a.suggested=Math.max(0,Math.round((a.suggested-(overflow*(a.suggested/scalableTotal)))/10)*10);});
+    }
+  }
+
   const rowsEl=document.getElementById('planner-alloc-rows');if(!rowsEl)return;
   rowsEl.innerHTML=allocations.map(a=>`
     <div class="alloc-row" id="${a.id}-row">
@@ -1177,7 +1195,33 @@ window.updateUnallocated=function(payslip){
   let total=0;inputs.forEach(i=>total+=parseFloat(i.value)||0);
   const unalloc=payslip-total;
   const badge=document.getElementById('planner-unallocated-badge');
-  if(badge){badge.textContent=(unalloc>=0?fmt(unalloc)+' unallocated':fmt(Math.abs(unalloc))+' over');badge.style.color=unalloc<0?'var(--bad)':unalloc===0?'var(--good)':'var(--muted)';}
+  if(badge){
+    if(unalloc<0){
+      badge.textContent=fmt(Math.abs(unalloc))+' over';
+      badge.style.cssText='color:var(--bad);background:var(--bad-pale);padding:3px 9px;border-radius:8px;font-weight:700';
+    } else if(unalloc===0){
+      badge.textContent='✓ Fully allocated';
+      badge.style.cssText='color:var(--good);background:var(--good-pale);padding:3px 9px;border-radius:8px;font-weight:700';
+    } else {
+      badge.textContent=fmt(unalloc)+' unallocated';
+      badge.style.cssText='color:var(--muted);background:var(--bg);padding:3px 9px;border-radius:8px;font-weight:400';
+    }
+  }
+  // Show/hide over-budget warning banner
+  let warn=document.getElementById('planner-over-warn');
+  if(unalloc<0){
+    if(!warn){
+      warn=document.createElement('div');warn.id='planner-over-warn';
+      warn.style.cssText='background:var(--bad-pale);border:1px solid #F0BFBB;border-radius:12px;padding:10px 14px;font-size:12px;color:var(--bad);margin-bottom:10px;display:flex;align-items:center;gap:8px';
+      warn.innerHTML=`<span style="font-size:16px">⚠</span><span>Your allocations exceed your payslip by <strong>${fmt(Math.abs(unalloc))}</strong> — reduce one or more items to balance.</span>`;
+      const card=document.getElementById('planner-alloc-card');
+      if(card)card.insertAdjacentElement('afterend',warn);
+    } else {
+      warn.querySelector('strong').textContent=fmt(Math.abs(unalloc));
+    }
+  } else {
+    if(warn)warn.remove();
+  }
 };
 
 // Persist rent amount to Firestore so it carries forward to all future cycles
