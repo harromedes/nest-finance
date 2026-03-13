@@ -1160,10 +1160,16 @@ function renderCyclePlanner(){
       <div id="planner-summary-rows"></div>
       ${!isFinalized?`<button onclick="finalizePlan()" style="width:100%;margin-top:14px;background:var(--good);color:#fff;border:none;padding:12px;border-radius:12px;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;cursor:pointer">✓ Finalise this plan</button>`:''}
     </div>
+
+    <!-- TRANSFERS CARD (only when finalized) -->
+    ${isFinalized?`<div class="card" id="planner-transfers-card">
+      <div id="planner-transfers-inner"></div>
+    </div>`:''}
   `;
 
   renderSavingsGoals();
   recalcPlanner();
+  if(isFinalized) renderTransfersCard();
 }
 
 window.navPlannerCycle=function(dir){
@@ -1496,6 +1502,8 @@ window.finalizePlan=async function(){
   await savePlannerCycle();
   const key=cycleKey(getPlannerCycle());
   plannerCyclePlans[key].finalized=true;
+  // Initialise sent map if not already set
+  if(!plannerCyclePlans[key].sent) plannerCyclePlans[key].sent={};
   await saveSettings();
   renderCyclePlanner();
 };
@@ -1505,6 +1513,107 @@ window.editPlan=function(){
   const key=cycleKey(getPlannerCycle());
   if(plannerCyclePlans[key])plannerCyclePlans[key].finalized=false;
   renderCyclePlanner();
+};
+
+// ── TRANSFERS CARD ─────────────────────────────────────────────────────────
+// IDs excluded from transfers (discretionary spend)
+const TRANSFER_EXCLUDE=new Set(['alloc-up']);
+
+function renderTransfersCard(){
+  const el=document.getElementById('planner-transfers-inner');if(!el)return;
+  const key=cycleKey(getPlannerCycle());
+  const plan=plannerCyclePlans[key];
+  if(!plan||!plan.finalized)return;
+
+  const allocs=plan.allocations||{};
+  const sent=plan.sent||{};
+
+  // Build transfer rows from saved allocations, excluding discretionary
+  const rows=Object.entries(allocs)
+    .filter(([id,amt])=>amt>0&&!TRANSFER_EXCLUDE.has(id))
+    .map(([id,amt])=>({id,amt,label:allocLabelForId(id),icon:allocIconForId(id),hint:allocHintForId(id)}))
+    .sort((a,b)=>b.amt-a.amt);
+
+  if(!rows.length){
+    el.innerHTML=`<div class="card-head"><span class="card-title">Transfers</span></div><div style="font-size:11px;color:var(--muted)">No allocations to transfer yet.</div>`;
+    return;
+  }
+
+  const sentCount=rows.filter(r=>sent[r.id]).length;
+  const allDone=sentCount===rows.length;
+  const pct=Math.round(sentCount/rows.length*100);
+
+  el.innerHTML=`
+    <div class="card-head" style="margin-bottom:10px">
+      <span class="card-title">Transfers</span>
+      <span class="card-badge" style="background:${allDone?'var(--good-pale)':'var(--warn-pale)'};color:${allDone?'var(--good)':'var(--warn)'}">
+        ${allDone?'🎉 All sent':sentCount+' of '+rows.length+' sent'}
+      </span>
+    </div>
+    ${allDone
+      ? `<div style="background:var(--good-pale);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px">
+          <span style="font-size:20px">🎉</span>
+          <div>
+            <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:800;color:var(--good)">All transfers done!</div>
+            <div style="font-size:11px;color:var(--good);opacity:.8">Every allocation has been sent this cycle.</div>
+          </div>
+        </div>`
+      : `<div style="height:5px;background:var(--bg);border-radius:3px;overflow:hidden;margin-bottom:12px">
+          <div style="height:100%;border-radius:3px;background:var(--good);width:${pct}%;transition:width .4s"></div>
+        </div>`
+    }
+    ${rows.map(r=>{
+      const isSent=!!(sent[r.id]);
+      return`<div class="transfer-row ${isSent?'sent':''}">
+        <div class="transfer-icon">${r.icon}</div>
+        <div style="flex:1;min-width:0">
+          <div class="transfer-label">${r.label}</div>
+          ${r.hint?`<div class="transfer-hint">${r.hint}</div>`:''}
+        </div>
+        <div class="transfer-amt">${fmt(r.amt)}</div>
+        <button class="transfer-toggle ${isSent?'done':''}" onclick="toggleTransferSent('${r.id}')" title="${isSent?'Mark as unsent':'Mark as sent'}">
+          ${isSent?'✓ Sent':'Send'}
+        </button>
+      </div>`;
+    }).join('')}
+  `;
+}
+
+// Map allocation IDs to display labels/icons/hints
+function allocLabelForId(id){
+  const m={
+    'alloc-rent':'Rent','alloc-anz':'ANZ — debt payment','alloc-wbc':'Westpac — debt payment',
+    'alloc-subs':'Subscriptions','alloc-invest':'Investments',
+  };
+  if(m[id])return m[id];
+  // Savings goals: alloc-goal-{idx}
+  if(id.startsWith('alloc-goal-')){
+    const idx=parseInt(id.replace('alloc-goal-',''));
+    return savingsGoals[idx]?(savingsGoals[idx].emoji+' '+savingsGoals[idx].name):'Savings goal';
+  }
+  return id;
+}
+function allocIconForId(id){
+  const m={'alloc-rent':'🏠','alloc-anz':'💳','alloc-wbc':'💳','alloc-subs':'📱','alloc-invest':'📈'};
+  if(m[id])return m[id];
+  if(id.startsWith('alloc-goal-')){
+    const idx=parseInt(id.replace('alloc-goal-',''));
+    return savingsGoals[idx]?savingsGoals[idx].emoji:'🎯';
+  }
+  return '💸';
+}
+function allocHintForId(id){
+  const m={'alloc-anz':'Transfer to ANZ credit card','alloc-wbc':'Transfer to Westpac credit card','alloc-invest':'Transfer to investment account'};
+  return m[id]||null;
+}
+
+window.toggleTransferSent=async function(allocId){
+  const key=cycleKey(getPlannerCycle());
+  if(!plannerCyclePlans[key])return;
+  if(!plannerCyclePlans[key].sent)plannerCyclePlans[key].sent={};
+  plannerCyclePlans[key].sent[allocId]=!plannerCyclePlans[key].sent[allocId];
+  await saveSettings();
+  renderTransfersCard();
 };
 
 // Goals management
@@ -2041,6 +2150,19 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .planner-page-sub{font-size:12px;color:var(--muted);margin-top:2px}
 .alloc-row{padding:10px 0;border-bottom:1px solid var(--bg)}
 .alloc-row:last-child{border-bottom:none}
+/* Transfer rows */
+.transfer-row{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--bg);transition:opacity .2s}
+.transfer-row:last-child{border-bottom:none}
+.transfer-row.sent{opacity:.55}
+.transfer-icon{width:32px;height:32px;border-radius:10px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.transfer-label{font-size:12px;font-weight:600;color:var(--text);line-height:1.3}
+.transfer-hint{font-size:10px;color:var(--muted);margin-top:1px}
+.transfer-amt{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--text);flex-shrink:0}
+.transfer-toggle{flex-shrink:0;padding:6px 12px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg);color:var(--muted);font-family:'Syne',sans-serif;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;white-space:nowrap}
+.transfer-toggle:hover{border-color:var(--good);color:var(--good);background:var(--good-pale)}
+.transfer-toggle.done{background:var(--good-pale);border-color:var(--good);color:var(--good)}
+.transfer-toggle.done:hover{background:var(--bad-pale);border-color:var(--bad);color:var(--bad)}
+.transfer-toggle.done:hover::after{content:' undo'}
 .goal-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--bg)}
 .goal-row:last-child{border-bottom:none}
 .goal-row.goal-complete{background:var(--good-pale);border-radius:12px;padding:10px 12px;margin-bottom:4px}
