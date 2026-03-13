@@ -22,7 +22,7 @@ const DAILY_RATE=0.000575;
 const CYCLE_DAY=15;
 const CAT_COLORS=['#6355D8','#9B8FEE','#C4B8FF','#2D6A4F','#68B88A','#B0D8BC','#B07D2A','#FFD080','#C0392B','#E88080'];
 const LEAK_THRESHOLDS={'Dining & Takeaway':120,'Subscriptions':60,'Shopping':80,'Entertainment':40,'Hobbies & Recreation':50};
-const NAV_PAGES=['overview','anz','wbc','up','transactions','debt','planner'];
+const NAV_PAGES=['overview','anz','wbc','up','transactions','debt','planner','settings'];
 
 let currentUser=null;
 let scriptURL='';
@@ -164,6 +164,7 @@ window.navigateTo=function(page){
   else if(page==='transactions') renderTransactionsPage();
   else if(page==='debt') renderDebtPlanner();
   else if(page==='planner'){plannerCycleOffset=0;renderCyclePlanner();}
+  else if(page==='settings') renderSettingsPage();
   else if((page==='anz'||page==='wbc')&&cc[page].statements.length) setTimeout(()=>drawCCCharts(page),60);
 };
 
@@ -172,7 +173,7 @@ window.toggleSidebar=function(){
   document.getElementById('sidebar-overlay').classList.toggle('show');
 };
 
-window.toggleConfig=function(){document.getElementById('config-panel').classList.toggle('hidden')};
+window.toggleConfig=function(){navigateTo('settings');};
 
 window.saveConfig=async function(){
   const u=document.getElementById('script-url').value.trim();
@@ -185,8 +186,10 @@ window.saveConfig=async function(){
   const wbcPromo=parseFloat(document.getElementById('wbc-promo-rate').value)||null;
   const wbcPromoExp=document.getElementById('wbc-promo-expiry').value||null;
   cardSettings.wbc.promoRate=wbcPromo;cardSettings.wbc.promoExpiry=wbcPromoExp;
-  document.getElementById('config-panel').classList.add('hidden');
   await saveSettings();
+  // Show saved feedback
+  const btn=document.getElementById('settings-save-btn');
+  if(btn){const orig=btn.textContent;btn.textContent='✓ Saved';btn.style.background='var(--good)';setTimeout(()=>{btn.textContent=orig;btn.style.background='';},2000);}
   if(ut&&ut!==upToken) await loadUpData();
 };
 
@@ -448,6 +451,74 @@ window.calcPayoff=function(bank){
   }).join('');
 };
 
+// ── SETTINGS PAGE ──────────────────────────────────────────────────────────
+function renderSettingsPage(){
+  const el=document.getElementById('settings-content');if(!el)return;
+  const u=currentUser;
+  el.innerHTML=`
+    <div class="planner-page-header">
+      <div class="planner-page-title">Settings</div>
+      <div class="planner-page-sub">Connections, preferences and account</div>
+    </div>
+
+    <!-- ACCOUNT -->
+    <div class="card">
+      <div class="card-head"><span class="card-title">Account</span></div>
+      <div style="display:flex;align-items:center;gap:12px;padding:4px 0">
+        ${u.photoURL?`<img src="${u.photoURL}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;flex-shrink:0">`:'<div style="width:44px;height:44px;border-radius:50%;background:var(--accent-pale);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">👤</div>'}
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:600;color:var(--text)">${u.displayName||'—'}</div>
+          <div style="font-size:11px;color:var(--muted)">${u.email||''}</div>
+        </div>
+        <button onclick="signOutUser()" style="background:var(--bad-pale);color:var(--bad);border:none;padding:8px 14px;border-radius:10px;font-family:'Syne',sans-serif;font-size:11px;font-weight:700;cursor:pointer">Sign out</button>
+      </div>
+    </div>
+
+    <!-- APPS SCRIPT -->
+    <div class="card">
+      <div class="card-head"><span class="card-title">Apps Script — PDF parser</span></div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:4px">Script URL</div><input class="config-input" id="script-url" type="text" placeholder="https://script.google.com/macros/s/…/exec" value="${scriptURL}"></div>
+        <div><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:4px">Secret token</div><input class="config-input" id="script-secret" type="password" placeholder="Your NEST_SECRET value" value="${scriptSecret}"></div>
+      </div>
+    </div>
+
+    <!-- UP BANK -->
+    <div class="card">
+      <div class="card-head"><span class="card-title">Up Bank</span></div>
+      <div>
+        <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:4px">Personal Access Token</div>
+        <input class="config-input" id="up-token" type="password" placeholder="up:yeah:…" value="${upToken}">
+        <div id="up-token-status" class="up-token-status" style="display:none"></div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px">Up app → Settings → API → Personal access token</div>
+      </div>
+    </div>
+
+    <!-- WESTPAC PROMO -->
+    <div class="card">
+      <div class="card-head"><span class="card-title">Westpac — promo rate</span></div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:4px">Promo rate (% p.a.) — blank if none</div><input class="config-input" id="wbc-promo-rate" type="number" step="0.01" min="0" placeholder="e.g. 0 for 0% balance transfer" value="${cardSettings.wbc.promoRate||''}"></div>
+        <div><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:4px">Promo expiry date</div><input class="config-input" id="wbc-promo-expiry" type="date" value="${cardSettings.wbc.promoExpiry||''}"></div>
+      </div>
+    </div>
+
+    <!-- DISPLAY -->
+    <div class="card">
+      <div class="card-head"><span class="card-title">Display</span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0">
+        <span style="font-size:12px;color:var(--text);font-weight:500">Dark mode</span>
+        <button id="dark-toggle" onclick="toggleDarkMode()" style="width:44px;height:24px;border-radius:12px;border:none;cursor:pointer;position:relative;transition:background .2s;background:${document.body.classList.contains('dark')?'var(--accent)':'var(--border)'}">
+          <span id="dark-toggle-knob" style="position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .2s;display:block;transform:${document.body.classList.contains('dark')?'translateX(20px)':'translateX(0)'}"></span>
+        </button>
+      </div>
+    </div>
+
+    <button id="settings-save-btn" onclick="saveConfig()" style="width:100%;background:var(--accent);color:#fff;border:none;padding:14px;border-radius:14px;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:20px">Save & connect</button>
+  `;
+  setUpTokenStatus(upToken?'saved':null);
+}
+
 // ── OVERVIEW PAGE ──────────────────────────────────────────────────────────
 function renderOverview(){
   const el=document.getElementById('overview-content');if(!el)return;
@@ -597,7 +668,8 @@ function renderTransactionsPage(){
     const rows=ctxs.map(t=>{
       const srcBadge=t.source==='anz'?'<span class="src-badge anz">ANZ</span>':t.source==='wbc'?'<span class="src-badge wbc">WBC</span>':t.source==='up'?`<span class="src-badge up">${t.acct||'Up'}</span>`:'<span class="src-badge manual">Manual</span>';
       const del=t.source==='manual'?`<button class="tx-del-btn" onclick="deleteMtx('${t.id}')">×</button>`:'';
-      return`<div class="tx-row"><div class="tx-icon">${t.source==='up'?upTxEmoji(t.merchant):catEmoji(t.category)}</div><div style="flex:1;min-width:0"><div class="tx-name">${t.merchant}</div><div class="tx-meta">${srcBadge}<span class="tx-tag">${t.category}</span></div></div><div class="tx-amt ${t.type==='credit'?'credit':''}">${t.type==='credit'?'+':''}${fmt(t.amount)}</div>${del}</div>`;
+      const edit=t.source==='manual'?`<button class="tx-edit-btn" onclick="openEditTx('${t.id}')">✎</button>`:'';
+      return`<div class="tx-row"><div class="tx-icon">${t.source==='up'?upTxEmoji(t.merchant):catEmoji(t.category)}</div><div style="flex:1;min-width:0"><div class="tx-name">${t.merchant}</div><div class="tx-meta">${srcBadge}<span class="tx-tag">${t.category}</span>${t.note?`<span class="tx-tag" style="background:var(--warn-pale);color:var(--warn)">${t.note}</span>`:''}</div></div><div class="tx-amt ${t.type==='credit'?'credit':''}">${t.type==='credit'?'+':''}${fmt(t.amount)}</div>${edit}${del}</div>`;
     }).join('');
     return`<div class="tx-cycle-group"><div class="tx-cycle-header"><span class="tx-cycle-lbl">${label}</span><span class="tx-cycle-total">${fmt(total)}</span></div>${rows}</div>`;
   }).join(''):'<div style="font-size:12px;color:var(--muted);padding:20px 0;text-align:center">No transactions found</div>';
@@ -605,6 +677,36 @@ function renderTransactionsPage(){
 
 window.deleteMtx=async function(id){
   await deleteManualTransaction(id);
+  renderTransactionsPage();
+  if(currentPage==='overview')renderOverview();
+};
+
+window.openEditTx=function(id){
+  const tx=manualTransactions.find(t=>t.id===id);if(!tx)return;
+  document.getElementById('edit-tx-id').value=id;
+  document.getElementById('edit-mtx-merchant').value=tx.merchant||'';
+  document.getElementById('edit-mtx-amount').value=tx.amount||'';
+  document.getElementById('edit-mtx-date').value=tx.date||'';
+  document.getElementById('edit-mtx-category').value=tx.category||'Other';
+  document.getElementById('edit-mtx-type').value=tx.type||'debit';
+  document.getElementById('edit-mtx-note').value=tx.note||'';
+  document.getElementById('edit-tx-overlay').style.display='flex';
+};
+window.closeEditTx=function(){document.getElementById('edit-tx-overlay').style.display='none';};
+window.saveEditTx=async function(){
+  const id=document.getElementById('edit-tx-id').value;
+  const merchant=document.getElementById('edit-mtx-merchant').value.trim();
+  const amount=parseFloat(document.getElementById('edit-mtx-amount').value);
+  const date=document.getElementById('edit-mtx-date').value;
+  const category=document.getElementById('edit-mtx-category').value;
+  const type=document.getElementById('edit-mtx-type').value;
+  const note=document.getElementById('edit-mtx-note').value.trim();
+  if(!merchant||isNaN(amount)||!date){alert('Please fill in merchant, amount and date.');return;}
+  const updated={merchant,amount,date,category,type,note,createdAt:manualTransactions.find(t=>t.id===id)?.createdAt||new Date().toISOString()};
+  await setDoc(doc(db,'users',uid(),'manual_transactions',id),updated);
+  const idx=manualTransactions.findIndex(t=>t.id===id);
+  if(idx>=0)manualTransactions[idx]={id,...updated};
+  closeEditTx();
   renderTransactionsPage();
   if(currentPage==='overview')renderOverview();
 };
@@ -801,6 +903,7 @@ function renderCyclePlanner(){
     :`<span style="font-size:9px;font-weight:700;background:var(--warn-pale);color:var(--warn);padding:2px 8px;border-radius:10px;margin-left:6px">+${plannerCycleOffset} cycle${plannerCycleOffset!==1?'s':''}</span>`;
 
   const savedPayslip=saved.payslip||5000;
+  const isFinalized=!!(plannerCyclePlans[key]&&plannerCyclePlans[key].finalized);
   const hasSavedPlan=!!(plannerCyclePlans[key]);
 
   el.innerHTML=`
@@ -817,7 +920,12 @@ function renderCyclePlanner(){
           <span class="cycle-nav-label" id="planner-cycle-label">${cycleLabel}</span>
           ${cycleBadge}
         </div>
-        ${hasSavedPlan?`<div style="font-size:9px;color:var(--good);font-weight:600;margin-top:2px">✓ Plan saved</div>`:`<div style="font-size:9px;color:var(--muted);margin-top:2px">No plan yet</div>`}
+        ${hasSavedPlan
+          ? isFinalized
+            ? `<div style="font-size:9px;color:var(--good);font-weight:600;margin-top:2px">✓ Finalised</div>`
+            : `<div style="font-size:9px;color:var(--good);font-weight:600;margin-top:2px">✓ Plan saved</div>`
+          : `<div style="font-size:9px;color:var(--muted);margin-top:2px">No plan yet</div>`
+        }
       </div>
       <button class="cycle-nav-btn" id="planner-cycle-next" onclick="navPlannerCycle(1)" ${plannerCycleOffset>=6?'disabled':''}>›</button>
     </div>
@@ -831,16 +939,26 @@ function renderCyclePlanner(){
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-size:18px;font-weight:700;color:var(--muted)">$</span>
             <input id="planner-payslip" type="number" min="0" step="100" placeholder="5000" value="${savedPayslip}"
-              style="font-family:'Syne',sans-serif;font-size:24px;font-weight:800;color:var(--text);border:none;background:transparent;width:130px;outline:none" oninput="recalcPlanner()">
+              ${isFinalized?'readonly style="font-family:\'Syne\',sans-serif;font-size:24px;font-weight:800;color:var(--muted);border:none;background:transparent;width:130px;outline:none"':'style="font-family:\'Syne\',sans-serif;font-size:24px;font-weight:800;color:var(--text);border:none;background:transparent;width:130px;outline:none"'}
+              oninput="recalcPlanner();autosavePlannerPayslip(this.value)">
           </div>
         </div>
-        <button onclick="savePlannerCycle()" style="background:var(--accent);color:#fff;border:none;padding:10px 18px;border-radius:12px;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer">Save plan</button>
+        ${isFinalized
+          ? `<button onclick="editPlan()" style="background:var(--warn-pale);color:var(--warn);border:1.5px solid var(--warn);padding:10px 18px;border-radius:12px;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer">✎ Edit plan</button>`
+          : `<button onclick="finalizePlan()" style="background:var(--good);color:#fff;border:none;padding:10px 18px;border-radius:12px;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer">✓ Finalise</button>`
+        }
       </div>
     </div>
 
     <!-- ALLOCATION SLIDERS -->
-    <div class="card" id="planner-alloc-card">
-      <div class="card-head"><span class="card-title">Allocations</span><span class="card-badge" id="planner-unallocated-badge"></span></div>
+    <div class="card" id="planner-alloc-card" ${isFinalized?'style="opacity:0.7;pointer-events:none"':''}>
+      <div class="card-head">
+        <span class="card-title">Allocations</span>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span class="card-badge" id="planner-unallocated-badge"></span>
+          ${!isFinalized?`<button onclick="redistributeAllocs()" style="background:var(--accent-pale);color:var(--accent);border:none;padding:4px 10px;border-radius:8px;font-family:'Syne',sans-serif;font-size:10px;font-weight:700;cursor:pointer">↺ Redistribute</button>`:''}
+        </div>
+      </div>
       <div id="planner-alloc-rows"></div>
     </div>
 
@@ -852,8 +970,15 @@ function renderCyclePlanner(){
 
     <!-- SUMMARY -->
     <div class="card" id="planner-summary-card" style="display:none">
-      <div class="card-head"><span class="card-title">Cycle plan</span><span class="card-badge" style="color:var(--good)">${cycleLabel}</span></div>
+      <div class="card-head">
+        <span class="card-title">Cycle plan</span>
+        <span class="card-badge" style="color:${isFinalized?'var(--good)':'var(--muted)'}">${isFinalized?'✓ Finalised':cycleLabel}</span>
+      </div>
+      <div style="display:flex;justify-content:center;margin-bottom:12px">
+        <canvas id="planner-pie" style="display:block"></canvas>
+      </div>
       <div id="planner-summary-rows"></div>
+      ${!isFinalized?`<button onclick="finalizePlan()" style="width:100%;margin-top:14px;background:var(--good);color:#fff;border:none;padding:12px;border-radius:12px;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;cursor:pointer">✓ Finalise this plan</button>`:''}
     </div>
   `;
 
@@ -886,22 +1011,52 @@ window.savePlannerCycle=async function(){
 function renderSavingsGoals(){
   const el=document.getElementById('planner-goals-list');if(!el)return;
   if(!savingsGoals.length){el.innerHTML='<div style="font-size:11px;color:var(--muted);padding:8px 0">No savings goals yet — add one above</div>';return;}
-  el.innerHTML=savingsGoals.map((g,i)=>`
-    <div class="goal-row">
+  const now=new Date();
+  el.innerHTML=savingsGoals.map((g,i)=>{
+    const remaining=Math.max(0,g.target-(g.saved||0));
+    const pct=Math.min(100,(g.saved||0)/g.target*100);
+    const isComplete=remaining<=0;
+    // Per-cycle contribution calc
+    let perCycleStr='';
+    if(g.targetDate&&!isComplete){
+      const td=new Date(g.targetDate+'T00:00:00');
+      const msRemain=td-now;
+      const cyclesLeft=Math.max(1,Math.ceil(msRemain/(30*24*60*60*1000)));
+      const perCycle=Math.ceil(remaining/cyclesLeft/10)*10;
+      perCycleStr=`<span style="font-size:10px;color:var(--accent);font-weight:600">${fmt(perCycle)}/cycle · ${cyclesLeft} cycle${cyclesLeft!==1?'s':''} left</span>`;
+    }
+    const dateStr=g.targetDate?new Date(g.targetDate+'T00:00:00').toLocaleDateString('en-AU',{month:'short',year:'numeric'}):'';
+    if(isComplete){
+      return`<div class="goal-row goal-complete">
+        <div class="goal-icon">🎉</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700;color:var(--good)">${g.name} — Goal reached!</div>
+          <div style="font-size:11px;color:var(--good);margin-top:2px">${fmt(g.saved||0)} saved of ${fmt(g.target)}</div>
+        </div>
+        <button onclick="dismissGoal(${i})" style="font-size:11px;font-weight:700;background:var(--good);color:#fff;border:none;padding:5px 12px;border-radius:8px;cursor:pointer">Dismiss 🎉</button>
+      </div>`;
+    }
+    return`<div class="goal-row">
       <div class="goal-icon">${g.emoji||'🎯'}</div>
       <div style="flex:1">
-        <div style="font-size:13px;font-weight:600;margin-bottom:2px">${g.name}</div>
-        <div style="height:5px;background:var(--bg);border-radius:3px;overflow:hidden;margin-bottom:3px">
-          <div style="height:100%;border-radius:3px;background:var(--good);width:${Math.min(100,(g.saved||0)/g.target*100).toFixed(1)}%"></div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+          <span style="font-size:13px;font-weight:600">${g.name}</span>
+          ${dateStr?`<span style="font-size:9px;color:var(--muted);background:var(--bg);padding:1px 6px;border-radius:6px">${dateStr}</span>`:''}
         </div>
-        <div style="font-size:10px;color:var(--muted)">${fmt(g.saved||0)} of ${fmt(g.target)}</div>
+        <div style="height:5px;background:var(--bg);border-radius:3px;overflow:hidden;margin-bottom:3px">
+          <div style="height:100%;border-radius:3px;background:var(--good);width:${pct.toFixed(1)}%"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-size:10px;color:var(--muted)">${fmt(g.saved||0)} of ${fmt(g.target)}</span>
+          ${perCycleStr}
+        </div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-        <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:800;color:var(--good)">${fmt(g.target-(g.saved||0))} to go</div>
+        <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:800;color:var(--good)">${fmt(remaining)} to go</div>
         <button onclick="deleteGoal(${i})" style="font-size:10px;color:var(--muted);background:none;border:none;cursor:pointer">remove</button>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 window.recalcPlanner=function(){
@@ -939,9 +1094,20 @@ window.recalcPlanner=function(){
     wbcDebt=Math.max(0,debtBudget-anzDebt);
   }
 
-  // Goals split of savings budget evenly
-  const goalCount=savingsGoals.length||1;
-  const perGoal=savingsGoals.length?Math.round(savingsBudget/goalCount/10)*10:savingsBudget;
+  // Goals: per-cycle contribution based on target date if set
+  const now=new Date();
+  const goalAllocs=savingsGoals.map((g,i)=>{
+    const remaining=Math.max(0,g.target-(g.saved||0));
+    let perCycle=savingsBudget/(savingsGoals.length||1);
+    if(g.targetDate&&remaining>0){
+      const td=new Date(g.targetDate+'T00:00:00');
+      const cyclesLeft=Math.max(1,Math.ceil((td-now)/(30*24*60*60*1000)));
+      perCycle=Math.ceil(remaining/cyclesLeft/10)*10;
+    } else {
+      perCycle=Math.round(savingsBudget/(savingsGoals.length||1)/10)*10;
+    }
+    return{id:'alloc-goal-'+i,label:g.name+' savings',icon:g.emoji||'🎯',color:'var(--good)',suggested:perCycle,min:0,max:Math.max(remaining,perCycle)};
+  });
 
   // Subscriptions: avg of last 3 ANZ cycles
   const anzStmts=cc.anz.statements;
@@ -959,7 +1125,7 @@ window.recalcPlanner=function(){
     {id:'alloc-wbc',label:'Westpac debt payment',icon:'💳',color:'#D84343',suggested:wbcDebt,min:0,max:wbcBal},
     {id:'alloc-subs',label:'Subscriptions',icon:'📱',color:'#9B8FEE',suggested:subSuggested,min:0,max:payslip,hint:subSource?`prefilled: ${subSource}`:null},
     {id:'alloc-up',label:'Up Bank spending',icon:'🛒',color:'var(--up)',suggested:spendBudget,min:0,max:payslip},
-    ...savingsGoals.map((g,i)=>({id:'alloc-goal-'+i,label:g.name+' savings',icon:g.emoji||'🎯',color:'var(--good)',suggested:perGoal,min:0,max:g.target-(g.saved||0)})),
+    ...goalAllocs,
     {id:'alloc-invest',label:'Investments',icon:'📈',color:'var(--accent)',suggested:investBudget,min:0,max:payslip},
   ];
 
@@ -1022,30 +1188,100 @@ window.persistRentAmount=async function(val){
   await saveSettings();
 };
 
+// Auto-save payslip to the current cycle plan
+window.autosavePlannerPayslip=async function(val){
+  const v=parseFloat(val)||0;
+  const key=cycleKey(getPlannerCycle());
+  if(!plannerCyclePlans[key])plannerCyclePlans[key]={};
+  plannerCyclePlans[key].payslip=v;
+  await saveSettings();
+};
+
 function updatePlannerSummary(payslip,allocations){
   const el=document.getElementById('planner-summary-rows');if(!el)return;
+  const canvas=document.getElementById('planner-pie');
+  const vals=allocations.map(a=>({
+    label:a.label,icon:a.icon,color:a.color,
+    val:parseFloat(document.getElementById(a.id+'-input')?.value)||a.suggested
+  }));
+  const total=vals.reduce((s,v)=>s+v.val,0);
+  const remaining=payslip-total;
+  const allEntries=remaining>0?[...vals,{label:'Unallocated',icon:'',color:'var(--border)',val:remaining}]:vals;
+
+  // Draw pie
+  if(canvas){
+    const dpr=window.devicePixelRatio||1;
+    const sz=Math.min(canvas.parentElement?.offsetWidth||200,200);
+    canvas.width=sz*dpr;canvas.height=sz*dpr;
+    canvas.style.width=sz+'px';canvas.style.height=sz+'px';
+    const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);
+    const cx=sz/2,cy=sz/2,r=sz/2-8,ir=r*0.52;
+    let startAngle=-Math.PI/2;
+    const grandTotal=allEntries.reduce((s,v)=>s+v.val,0)||1;
+    allEntries.forEach(v=>{
+      const slice=(v.val/grandTotal)*Math.PI*2;
+      ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,startAngle,startAngle+slice);ctx.closePath();
+      // Resolve CSS var colours
+      let col=v.color;
+      if(col.startsWith('var(')){const vn=col.slice(4,-1).trim();col=getComputedStyle(document.body).getPropertyValue(vn).trim()||'#ccc';}
+      ctx.fillStyle=col;ctx.fill();
+      startAngle+=slice;
+    });
+    // Donut hole
+    ctx.beginPath();ctx.arc(cx,cy,ir,0,Math.PI*2);
+    ctx.fillStyle=getComputedStyle(document.body).getPropertyValue('--surface').trim()||'#fff';
+    ctx.fill();
+    // Centre label
+    ctx.fillStyle=getComputedStyle(document.body).getPropertyValue('--text').trim()||'#1A1830';
+    ctx.font=`bold ${Math.round(sz*0.085)}px Syne,sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(fmt(total),cx,cy-6);
+    ctx.font=`${Math.round(sz*0.065)}px DM Sans,sans-serif`;
+    ctx.fillStyle=getComputedStyle(document.body).getPropertyValue('--muted').trim()||'#999';
+    ctx.fillText('allocated',cx,cy+10);
+  }
+
+  // Legend rows
   let html='';
-  let total=0;
-  allocations.forEach(a=>{
-    const val=parseFloat(document.getElementById(a.id+'-input')?.value)||a.suggested;
-    total+=val;
-    const pct=(val/payslip*100).toFixed(0);
-    html+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bg)">
-      <div style="display:flex;align-items:center;gap:7px"><span>${a.icon}</span><span style="font-size:12px">${a.label}</span></div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:10px;color:var(--muted)">${pct}%</span>
-        <span style="font-family:'Syne',sans-serif;font-size:14px;font-weight:800">${fmt(val)}</span>
-      </div>
+  vals.forEach(v=>{
+    const pct=grandTotal?((v.val/grandTotal)*100).toFixed(0):'0';
+    let col=v.color;
+    if(col.startsWith('var(')){const vn=col.slice(4,-1).trim();col=getComputedStyle(document.body).getPropertyValue(vn).trim()||'#ccc';}
+    html+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bg)">
+      <div style="width:10px;height:10px;border-radius:3px;background:${col};flex-shrink:0"></div>
+      <span style="font-size:11px;flex:1">${v.icon} ${v.label}</span>
+      <span style="font-size:10px;color:var(--muted)">${pct}%</span>
+      <span style="font-family:'Syne',sans-serif;font-size:13px;font-weight:800">${fmt(v.val)}</span>
     </div>`;
   });
-  const remaining=payslip-total;
-  html+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0 2px">
-    <span style="font-size:12px;font-weight:600">Total allocated</span>
-    <span style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:${remaining<0?'var(--bad)':remaining===0?'var(--good)':'var(--text)'}">${fmt(total)}</span>
+  if(remaining!==0)html+=`<div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:8px 0 2px">
+    <span style="font-size:11px;font-weight:600;color:${remaining<0?'var(--bad)':'var(--muted)'}">${remaining>0?fmt(remaining)+' unallocated':fmt(Math.abs(remaining))+' over'}</span>
   </div>`;
-  if(remaining!==0)html+=`<div style="font-size:10px;color:${remaining<0?'var(--bad)':'var(--muted)'};text-align:right">${remaining>0?fmt(remaining)+' unallocated':fmt(Math.abs(remaining))+' over payslip'}</div>`;
   el.innerHTML=html;
 }
+
+// Redistribution: reset to suggested + re-run avalanche
+window.redistributeAllocs=function(){
+  // Clear saved plan overrides for this cycle then re-render fresh
+  const key=cycleKey(getPlannerCycle());
+  if(plannerCyclePlans[key])delete plannerCyclePlans[key].allocations;
+  recalcPlanner();
+};
+
+// Finalize plan
+window.finalizePlan=async function(){
+  await savePlannerCycle();
+  const key=cycleKey(getPlannerCycle());
+  plannerCyclePlans[key].finalized=true;
+  await saveSettings();
+  renderCyclePlanner();
+};
+
+// Unfinalize (edit mode)
+window.editPlan=function(){
+  const key=cycleKey(getPlannerCycle());
+  if(plannerCyclePlans[key])plannerCyclePlans[key].finalized=false;
+  renderCyclePlanner();
+};
 
 // Goals management
 window.openAddGoal=function(){document.getElementById('add-goal-overlay').style.display='flex';};
@@ -1054,14 +1290,21 @@ window.saveGoal=async function(){
   const name=document.getElementById('goal-name').value.trim();
   const target=parseFloat(document.getElementById('goal-target').value);
   const emoji=document.getElementById('goal-emoji').value.trim()||'🎯';
+  const targetDate=document.getElementById('goal-date').value||null;
   if(!name||isNaN(target)||target<=0){alert('Please enter a name and target amount.');return;}
-  savingsGoals.push({name,target,saved:0,emoji});
+  savingsGoals.push({name,target,saved:0,emoji,targetDate});
   await saveSettings();
   closeAddGoal();
   renderSavingsGoals();
   recalcPlanner();
 };
 window.deleteGoal=async function(idx){
+  savingsGoals.splice(idx,1);
+  await saveSettings();
+  renderSavingsGoals();
+  recalcPlanner();
+};
+window.dismissGoal=async function(idx){
   savingsGoals.splice(idx,1);
   await saveSettings();
   renderSavingsGoals();
@@ -1536,6 +1779,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .src-badge.manual{background:var(--warn-pale);color:var(--warn)}
 .tx-del-btn{background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0}
 .tx-del-btn:hover{color:var(--bad)}
+.tx-edit-btn{background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0}
+.tx-edit-btn:hover{color:var(--accent)}
 
 /* ── DEBT PLANNER PAGE ── */
 .debt-hero{background:linear-gradient(140deg,#8A1A1A 0%,#C0392B 100%);border-radius:22px;padding:22px;margin-bottom:10px;position:relative;overflow:hidden}
@@ -1560,6 +1805,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .alloc-row:last-child{border-bottom:none}
 .goal-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--bg)}
 .goal-row:last-child{border-bottom:none}
+.goal-row.goal-complete{background:var(--good-pale);border-radius:12px;padding:10px 12px;margin-bottom:4px}
 .goal-icon{width:34px;height:34px;border-radius:10px;background:var(--good-pale);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
 
 /* ── CC HERO ── */
@@ -1845,14 +2091,14 @@ body.dark .mobile-topbar{border-bottom-color:var(--border)}
       </div>
     </nav>
     <div class="sidebar-bottom">
-      <div class="sidebar-user-row">
+      <div class="sidebar-user-row" onclick="navigateTo('settings')" style="cursor:pointer;border-radius:10px;padding:6px;margin:-6px;transition:background .15s" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
         <img id="sidebar-avatar" src="" alt="">
         <span id="sidebar-user"></span>
-        <span class="nav-badge" id="nav-status"></span>
+        <span style="font-size:11px;color:var(--muted);margin-left:auto">⚙</span>
       </div>
-      <div class="sidebar-btn-row">
-        <button class="btn-config" onclick="toggleConfig()">⚙ Config</button>
-        <button class="btn-signout" onclick="signOutUser()">↪</button>
+      <div class="sidebar-btn-row" style="margin-top:8px">
+        <span class="nav-badge" id="nav-status"></span>
+        <button class="btn-signout" onclick="signOutUser()" style="margin-left:auto">↪ Sign out</button>
       </div>
     </div>
   </aside>
@@ -1871,31 +2117,9 @@ body.dark .mobile-topbar{border-bottom-color:var(--border)}
     <div class="page-scroll">
       <div class="page-inner">
 
-        <!-- CONFIG PANEL -->
-        <div id="config-panel" class="hidden">
-          <div class="config-section">Apps Script — PDF parser</div>
-          <div class="config-field"><label class="config-lbl">Script URL</label><input class="config-input" id="script-url" type="text" placeholder="https://script.google.com/macros/s/…/exec"></div>
-          <div class="config-field"><label class="config-lbl">Secret token</label><input class="config-input" id="script-secret" type="password" placeholder="Your NEST_SECRET value"></div>
-          <div class="config-section">Up Bank — live spending</div>
-          <div class="config-field">
-            <label class="config-lbl">Personal Access Token</label>
-            <input class="config-input" id="up-token" type="password" placeholder="up:yeah:…">
-            <div id="up-token-status" class="up-token-status" style="display:none"></div>
-          </div>
-          <div class="config-section">Westpac — promo interest rate</div>
-          <div class="config-field"><label class="config-lbl">Promo rate (% p.a.) — leave blank if none</label><input class="config-input" id="wbc-promo-rate" type="number" step="0.01" min="0" placeholder="e.g. 0 for 0% balance transfer"></div>
-          <div class="config-field"><label class="config-lbl">Promo expiry date</label><input class="config-input" id="wbc-promo-expiry" type="date"></div>
-          <div class="config-section">Display</div>
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0 10px">
-            <span style="font-size:12px;color:var(--text);font-weight:500">Dark mode</span>
-            <button id="dark-toggle" onclick="toggleDarkMode()" style="width:44px;height:24px;border-radius:12px;border:none;cursor:pointer;position:relative;transition:background .2s;background:var(--border)">
-              <span id="dark-toggle-knob" style="position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .2s;display:block"></span>
-            </button>
-          </div>
-          <div class="config-foot">
-            <span class="config-hint">Settings saved to your account.</span>
-            <button class="btn-save" onclick="saveConfig()">Save & connect</button>
-          </div>
+        <!-- ══ SETTINGS PAGE ══ -->
+        <div class="page-panel" id="page-settings">
+          <div id="settings-content"></div>
         </div>
 
         <!-- ══ OVERVIEW PAGE ══ -->
@@ -2159,6 +2383,36 @@ body.dark .mobile-topbar{border-bottom-color:var(--border)}
   </div>
 </div>
 
+<!-- EDIT MANUAL TX OVERLAY -->
+<div id="edit-tx-overlay" style="display:none;position:fixed;inset:0;background:rgba(26,24,48,0.45);z-index:200;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)closeEditTx()">
+  <div style="background:var(--surface);border-radius:20px;padding:24px;width:100%;max-width:340px;box-shadow:0 8px 32px rgba(99,85,216,0.18);max-height:90vh;overflow-y:auto">
+    <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:var(--text);margin-bottom:16px">Edit transaction</div>
+    <input type="hidden" id="edit-tx-id">
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:3px">Merchant / description</div><input id="edit-mtx-merchant" type="text" placeholder="e.g. JB Hi-Fi" style="width:100%;border:1.5px solid var(--border);background:var(--bg);color:var(--text);padding:9px 12px;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:3px">Amount ($)</div><input id="edit-mtx-amount" type="number" min="0" step="0.01" placeholder="0.00" style="width:100%;border:1.5px solid var(--border);background:var(--bg);color:var(--text);padding:9px 12px;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none"></div>
+        <div><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:3px">Date</div><input id="edit-mtx-date" type="date" style="width:100%;border:1.5px solid var(--border);background:var(--bg);color:var(--text);padding:9px 12px;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:12px;outline:none"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:3px">Type</div>
+          <select id="edit-mtx-type" style="width:100%;border:1.5px solid var(--border);background:var(--bg);color:var(--text);padding:9px 12px;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:12px;outline:none;appearance:none">
+            <option value="debit">Debit (spend)</option><option value="credit">Credit (income)</option>
+          </select></div>
+        <div><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:3px">Category</div>
+          <select id="edit-mtx-category" style="width:100%;border:1.5px solid var(--border);background:var(--bg);color:var(--text);padding:9px 12px;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:12px;outline:none;appearance:none">
+            <option>Groceries</option><option>Dining & Takeaway</option><option>Fuel & Transport</option><option>Subscriptions</option><option>Health & Pharmacy</option><option>Shopping</option><option>Entertainment</option><option>Hobbies & Recreation</option><option>Personal Care</option><option>Travel & Accommodation</option><option>Automotive</option><option>Home & Garden</option><option>Phone & Internet</option><option>Utilities</option><option>Other</option>
+          </select></div>
+      </div>
+      <div><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:3px">Note (optional)</div><input id="edit-mtx-note" type="text" placeholder="Any note…" style="width:100%;border:1.5px solid var(--border);background:var(--bg);color:var(--text);padding:9px 12px;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button onclick="closeEditTx()" style="flex:1;padding:10px;border-radius:11px;border:1.5px solid var(--border);background:var(--bg);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer">Cancel</button>
+      <button onclick="saveEditTx()" style="flex:2;padding:10px;border-radius:11px;border:none;background:var(--accent);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:#fff;cursor:pointer">Save changes</button>
+    </div>
+  </div>
+</div>
+
 <!-- ADD SAVINGS GOAL OVERLAY -->
 <div id="add-goal-overlay" style="display:none;position:fixed;inset:0;background:rgba(26,24,48,0.45);z-index:200;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)closeAddGoal()">
   <div style="background:var(--surface);border-radius:20px;padding:24px;width:100%;max-width:320px;box-shadow:0 8px 32px rgba(99,85,216,0.18)">
@@ -2166,6 +2420,7 @@ body.dark .mobile-topbar{border-bottom-color:var(--border)}
     <div style="display:flex;flex-direction:column;gap:10px">
       <div><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:3px">Goal name</div><input id="goal-name" type="text" placeholder="e.g. Japan holiday" style="width:100%;border:1.5px solid var(--border);background:var(--bg);color:var(--text);padding:9px 12px;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none"></div>
       <div><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:3px">Target amount ($)</div><input id="goal-target" type="number" min="0" step="50" placeholder="e.g. 3000" style="width:100%;border:1.5px solid var(--border);background:var(--bg);color:var(--text);padding:9px 12px;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none"></div>
+      <div><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:3px">Target date (optional)</div><input id="goal-date" type="month" style="width:100%;border:1.5px solid var(--border);background:var(--bg);color:var(--text);padding:9px 12px;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:12px;outline:none"></div>
       <div><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:3px">Emoji (optional)</div><input id="goal-emoji" type="text" placeholder="🎯" maxlength="2" style="width:80px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);padding:9px 12px;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:20px;text-align:center;outline:none"></div>
     </div>
     <div style="display:flex;gap:8px;margin-top:16px">
