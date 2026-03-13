@@ -22,7 +22,7 @@ const DAILY_RATE=0.000575;
 const CYCLE_DAY=15;
 const CAT_COLORS=['#6355D8','#9B8FEE','#C4B8FF','#2D6A4F','#68B88A','#B0D8BC','#B07D2A','#FFD080','#C0392B','#E88080'];
 const LEAK_THRESHOLDS={'Dining & Takeaway':120,'Subscriptions':60,'Shopping':80,'Entertainment':40,'Hobbies & Recreation':50};
-const NAV_PAGES=['overview','anz','wbc','up','transactions','debt','planner','settings'];
+const NAV_PAGES=['overview','anz','wbc','up','transactions','debt','planner','savings','settings'];
 
 let currentUser=null;
 let scriptURL='';
@@ -211,6 +211,7 @@ window.navigateTo=function(page){
   else if(page==='transactions') renderTransactionsPage();
   else if(page==='debt') renderDebtPlanner();
   else if(page==='planner'){plannerCycleOffset=0;renderCyclePlanner();}
+  else if(page==='savings') renderSavingsPage();
   else if(page==='settings') renderSettingsPage();
   else if((page==='anz'||page==='wbc')&&cc[page].statements.length) setTimeout(()=>drawCCCharts(page),60);
 };
@@ -660,6 +661,33 @@ function renderOverview(){
         ${cycleBudget?`<div style="text-align:right"><div style="font-size:10px;color:var(--muted);margin-bottom:2px">budget</div><div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:var(--text)">${fmt(cycleBudget)}</div></div>`:''}
       </div>
       ${cycleBudget?`<div style="height:6px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="height:100%;border-radius:4px;background:var(--up);width:${Math.min(100,(cycleSpent/cycleBudget*100)).toFixed(1)}%;transition:width .5s"></div></div>`:''}
+    </div>`:''}
+
+    <!-- SAVINGS GOALS OVERVIEW -->
+    ${savingsGoals.length?`
+    <div class="card">
+      <div class="card-head"><span class="card-title">Savings goals</span><span class="card-action" onclick="navigateTo('savings')">View all →</span></div>
+      ${savingsGoals.slice(0,3).map(g=>{
+        const saved=g.saved||0;
+        const pct=Math.min(100,saved/g.target*100);
+        const remaining=Math.max(0,g.target-saved);
+        const isComplete=remaining<=0;
+        return`<div style="margin-bottom:10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+            <div style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px">
+              <span>${g.emoji||'🎯'}</span><span>${g.name}</span>
+              ${isComplete?'<span style="font-size:9px;background:var(--good-pale);color:var(--good);padding:1px 6px;border-radius:6px;font-weight:700">Done!</span>':''}
+            </div>
+            <div style="font-family:\'Syne\',sans-serif;font-size:12px;font-weight:800;color:${isComplete?'var(--good)':'var(--text)'}">
+              ${fmt(saved)}<span style="font-size:10px;font-weight:400;color:var(--muted)"> / ${fmt(g.target)}</span>
+            </div>
+          </div>
+          <div style="height:5px;background:var(--bg);border-radius:3px;overflow:hidden">
+            <div style="height:100%;border-radius:3px;background:var(--good);width:${pct.toFixed(1)}%;transition:width .4s"></div>
+          </div>
+        </div>`;
+      }).join('')}
+      ${savingsGoals.length>3?`<div style="font-size:11px;color:var(--muted);margin-top:4px">+${savingsGoals.length-3} more goal${savingsGoals.length-3!==1?'s':''}</div>`:''}
     </div>`:''}
 
     <!-- RECURRING REVIEW CARD -->
@@ -1142,10 +1170,16 @@ function renderCyclePlanner(){
       <div id="planner-alloc-rows"></div>
     </div>
 
-    <!-- SAVINGS GOALS -->
+    <!-- SAVINGS GOALS (compact link) -->
     <div class="card">
-      <div class="card-head"><span class="card-title">Savings goals</span><span class="card-action" onclick="openAddGoal()">+ Add goal</span></div>
-      <div id="planner-goals-list"></div>
+      <div class="card-head">
+        <span class="card-title">Savings goals</span>
+        <span class="card-action" onclick="navigateTo('savings')">Manage →</span>
+      </div>
+      ${savingsGoals.length
+        ? `<div id="planner-goals-list"></div>`
+        : `<div style="font-size:11px;color:var(--muted)">No goals yet — <span style="color:var(--accent);cursor:pointer" onclick="navigateTo('savings')">add one on the Savings page</span></div>`
+      }
     </div>
 
     <!-- SUMMARY -->
@@ -1184,9 +1218,13 @@ window.savePlannerCycle=async function(){
   const inputs=document.querySelectorAll('[id$="-input"][id^="alloc-"]');
   const allocations={};
   inputs.forEach(i=>allocations[i.id.replace('-input','')]=parseFloat(i.value)||0);
-  plannerCyclePlans[key]={payslip,allocations};
+  // Preserve finalized + sent state — only update payslip + allocations
+  plannerCyclePlans[key]={
+    ...(plannerCyclePlans[key]||{}),
+    payslip,
+    allocations,
+  };
   await saveSettings();
-  // Refresh nav area to show saved indicator
   const labelEl=document.getElementById('planner-cycle-label');
   if(labelEl){
     const savedEl=labelEl.closest('.cycle-nav').querySelector('[style*="margin-top:2px"]');
@@ -1244,6 +1282,139 @@ function renderSavingsGoals(){
     </div>`;
   }).join('');
 }
+
+// ── SAVINGS GOALS PAGE ─────────────────────────────────────────────────────
+function renderSavingsPage(){
+  const el=document.getElementById('savings-content');if(!el)return;
+  const now=new Date();
+  const totalTarget=savingsGoals.reduce((s,g)=>s+g.target,0);
+  const totalSaved=savingsGoals.reduce((s,g)=>s+(g.saved||0),0);
+  const totalRemaining=Math.max(0,totalTarget-totalSaved);
+  const overallPct=totalTarget?Math.min(100,totalSaved/totalTarget*100):0;
+
+  el.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800">Savings goals</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${savingsGoals.length} goal${savingsGoals.length!==1?'s':''}</div>
+      </div>
+      <button onclick="openAddGoal()" style="background:var(--good);color:#fff;border:none;padding:9px 16px;border-radius:12px;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer">+ Add goal</button>
+    </div>
+
+    ${savingsGoals.length?`
+    <!-- HERO SUMMARY -->
+    <div style="background:linear-gradient(140deg,#1E5C35 0%,#2D6A4F 100%);border-radius:20px;padding:20px;margin-bottom:12px;position:relative;overflow:hidden">
+      <div style="position:absolute;right:-16px;top:-16px;width:90px;height:90px;border-radius:50%;background:rgba(255,255,255,0.07)"></div>
+      <div style="font-size:9px;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Total saved</div>
+      <div style="font-family:'Syne',sans-serif;font-size:38px;font-weight:800;color:#fff;line-height:1;margin-bottom:4px">${fmt(totalSaved)}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.6);margin-bottom:14px">${fmt(totalRemaining)} remaining across all goals</div>
+      <div style="height:5px;background:rgba(255,255,255,0.18);border-radius:3px;overflow:hidden;margin-bottom:5px">
+        <div style="height:100%;border-radius:3px;background:rgba(255,255,255,0.8);width:${overallPct.toFixed(1)}%;transition:width .5s"></div>
+      </div>
+      <div style="font-size:10px;color:rgba(255,255,255,0.5)">${overallPct.toFixed(0)}% of ${fmt(totalTarget)} total target</div>
+    </div>
+    `:''}
+
+    <!-- GOALS LIST -->
+    <div id="savings-goals-list"></div>
+
+    ${!savingsGoals.length?`
+    <div style="text-align:center;padding:40px 0">
+      <div style="font-size:36px;margin-bottom:10px">🎯</div>
+      <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px">No savings goals yet</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:20px">Set a target — holiday, emergency fund, gadget — and track your progress each cycle.</div>
+      <button onclick="openAddGoal()" style="background:var(--good);color:#fff;border:none;padding:11px 24px;border-radius:12px;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;cursor:pointer">+ Add your first goal</button>
+    </div>`:''}
+  `;
+  renderSavingsGoalsList();
+}
+
+function renderSavingsGoalsList(){
+  const el=document.getElementById('savings-goals-list');if(!el)return;
+  if(!savingsGoals.length)return;
+  const now=new Date();
+  el.innerHTML=savingsGoals.map((g,i)=>{
+    const saved=g.saved||0;
+    const remaining=Math.max(0,g.target-saved);
+    const pct=Math.min(100,saved/g.target*100);
+    const isComplete=remaining<=0;
+    let perCycleStr='';let cyclesLeft=null;
+    if(g.targetDate&&!isComplete){
+      const td=new Date(g.targetDate+'T00:00:00');
+      const msRemain=td-now;
+      cyclesLeft=Math.max(1,Math.ceil(msRemain/(30*24*60*60*1000)));
+      const perCycle=Math.ceil(remaining/cyclesLeft/10)*10;
+      perCycleStr=fmt(perCycle)+'/cycle · '+cyclesLeft+' cycle'+(cyclesLeft!==1?'s':'')+' left';
+    }
+    const dateStr=g.targetDate?new Date(g.targetDate+'T00:00:00').toLocaleDateString('en-AU',{month:'short',year:'numeric'}):'';
+    if(isComplete){
+      return`<div style="background:var(--good-pale);border:1.5px solid #B0D8BC;border-radius:16px;padding:16px;margin-bottom:10px;display:flex;align-items:center;gap:12px">
+        <div style="font-size:28px">🎉</div>
+        <div style="flex:1">
+          <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:var(--good)">${g.name}</div>
+          <div style="font-size:11px;color:var(--good);margin-top:2px">${fmt(saved)} saved — goal reached!</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+          <button onclick="openDepositGoal(${i})" style="font-size:11px;font-weight:700;background:var(--good-pale);color:var(--good);border:1.5px solid var(--good);padding:5px 12px;border-radius:8px;cursor:pointer">+ Deposit</button>
+          <button onclick="dismissGoal(${i})" style="font-size:10px;color:var(--muted);background:none;border:none;cursor:pointer">Dismiss</button>
+        </div>
+      </div>`;
+    }
+    return`<div style="background:var(--surface);border-radius:16px;padding:16px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:8px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="font-size:26px;width:42px;height:42px;background:var(--bg);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${g.emoji||'🎯'}</div>
+          <div>
+            <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--text)">${g.name}</div>
+            ${dateStr?`<div style="font-size:10px;color:var(--muted);margin-top:1px">Target: ${dateStr}</div>`:''}
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--good)">${fmt(saved)}</div>
+          <div style="font-size:10px;color:var(--muted)">of ${fmt(g.target)}</div>
+        </div>
+      </div>
+      <div style="height:8px;background:var(--bg);border-radius:5px;overflow:hidden;margin-bottom:8px">
+        <div style="height:100%;border-radius:5px;background:var(--good);width:${pct.toFixed(1)}%;transition:width .4s"></div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+        <div>
+          <span style="font-size:11px;color:var(--muted)">${fmt(remaining)} to go</span>
+          ${perCycleStr?`<span style="font-size:10px;color:var(--accent);font-weight:600;margin-left:8px;background:var(--accent-pale);padding:2px 7px;border-radius:8px">${perCycleStr}</span>`:''}
+        </div>
+        <div style="display:flex;gap:6px">
+          <button onclick="openDepositGoal(${i})" style="background:var(--good-pale);color:var(--good);border:none;padding:6px 14px;border-radius:9px;font-family:'Syne',sans-serif;font-size:11px;font-weight:700;cursor:pointer">+ Deposit</button>
+          <button onclick="deleteGoal(${i})" style="background:none;border:none;font-size:11px;color:var(--muted);cursor:pointer;padding:6px 4px">remove</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Deposit to a goal
+window.openDepositGoal=function(idx){
+  document.getElementById('deposit-goal-idx').value=idx;
+  const g=savingsGoals[idx];
+  document.getElementById('deposit-goal-name').textContent=g?(g.emoji||'🎯')+' '+g.name:'';
+  document.getElementById('deposit-goal-remaining').textContent=g?'Remaining: '+fmt(Math.max(0,g.target-(g.saved||0))):'';
+  document.getElementById('deposit-amount').value='';
+  document.getElementById('deposit-overlay').style.display='flex';
+  setTimeout(()=>document.getElementById('deposit-amount').focus(),50);
+};
+window.closeDeposit=function(){document.getElementById('deposit-overlay').style.display='none';};
+window.saveDeposit=async function(){
+  const idx=parseInt(document.getElementById('deposit-goal-idx').value);
+  const amt=parseFloat(document.getElementById('deposit-amount').value);
+  if(isNaN(amt)||amt<=0){alert('Enter a valid amount.');return;}
+  savingsGoals[idx].saved=(savingsGoals[idx].saved||0)+amt;
+  await saveSettings();
+  closeDeposit();
+  if(currentPage==='savings')renderSavingsPage();
+  if(currentPage==='overview')renderOverview();
+  // Also refresh goals in planner if visible
+  renderSavingsGoals();
+};
+window.depositKey=function(e){if(e.key==='Enter')saveDeposit();};
 
 window.recalcPlanner=function(){
   const payslip=parseFloat(document.getElementById('planner-payslip')?.value)||5000;
@@ -1523,9 +1694,12 @@ function renderTransfersCard(){
   const el=document.getElementById('planner-transfers-inner');if(!el)return;
   const key=cycleKey(getPlannerCycle());
   const plan=plannerCyclePlans[key];
-  if(!plan||!plan.finalized)return;
+  if(!plan||!plan.finalized||!plan.allocations){
+    el.innerHTML='<div style="font-size:11px;color:var(--muted)">Finalise your plan to track transfers.</div>';
+    return;
+  }
 
-  const allocs=plan.allocations||{};
+  const allocs=plan.allocations;
   const sent=plan.sent||{};
 
   // Build transfer rows from saved allocations, excluding discretionary
@@ -1630,18 +1804,24 @@ window.saveGoal=async function(){
   closeAddGoal();
   renderSavingsGoals();
   recalcPlanner();
+  if(currentPage==='savings')renderSavingsPage();
+  if(currentPage==='overview')renderOverview();
 };
 window.deleteGoal=async function(idx){
   savingsGoals.splice(idx,1);
   await saveSettings();
   renderSavingsGoals();
   recalcPlanner();
+  if(currentPage==='savings')renderSavingsPage();
+  if(currentPage==='overview')renderOverview();
 };
 window.dismissGoal=async function(idx){
   savingsGoals.splice(idx,1);
   await saveSettings();
   renderSavingsGoals();
   recalcPlanner();
+  if(currentPage==='savings')renderSavingsPage();
+  if(currentPage==='overview')renderOverview();
 };
 
 // ── UP BANK ────────────────────────────────────────────────────────────────
@@ -2449,6 +2629,9 @@ body.dark .mobile-topbar{border-bottom-color:var(--border)}
       <div class="nav-link" data-page="planner" onclick="navigateTo('planner')">
         <span class="nav-link-icon">🗓</span> Cycle planner
       </div>
+      <div class="nav-link" data-page="savings" onclick="navigateTo('savings')">
+        <span class="nav-link-icon">🎯</span> Savings goals
+      </div>
     </nav>
     <div class="sidebar-bottom">
       <div class="sidebar-user-row" onclick="navigateTo('settings')" style="cursor:pointer;border-radius:10px;padding:6px;margin:-6px;transition:background .15s" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
@@ -2480,6 +2663,11 @@ body.dark .mobile-topbar{border-bottom-color:var(--border)}
         <!-- ══ SETTINGS PAGE ══ -->
         <div class="page-panel" id="page-settings">
           <div id="settings-content"></div>
+        </div>
+
+        <!-- ══ SAVINGS GOALS PAGE ══ -->
+        <div class="page-panel" id="page-savings">
+          <div id="savings-content"></div>
         </div>
 
         <!-- ══ OVERVIEW PAGE ══ -->
@@ -2786,6 +2974,23 @@ body.dark .mobile-topbar{border-bottom-color:var(--border)}
     <div style="display:flex;gap:8px;margin-top:16px">
       <button onclick="closeAddGoal()" style="flex:1;padding:10px;border-radius:11px;border:1.5px solid var(--border);background:var(--bg);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer">Cancel</button>
       <button onclick="saveGoal()" style="flex:2;padding:10px;border-radius:11px;border:none;background:var(--good);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:#fff;cursor:pointer">Save goal</button>
+    </div>
+  </div>
+</div>
+
+<!-- DEPOSIT TO GOAL OVERLAY -->
+<div id="deposit-overlay" style="display:none;position:fixed;inset:0;background:rgba(26,24,48,0.45);z-index:200;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)closeDeposit()">
+  <div style="background:var(--surface);border-radius:20px;padding:24px;width:100%;max-width:320px;box-shadow:0 8px 32px rgba(99,85,216,0.18)">
+    <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:var(--text);margin-bottom:4px">Add deposit</div>
+    <div id="deposit-goal-name" style="font-size:13px;font-weight:600;color:var(--good);margin-bottom:2px"></div>
+    <div id="deposit-goal-remaining" style="font-size:11px;color:var(--muted);margin-bottom:16px"></div>
+    <input type="hidden" id="deposit-goal-idx">
+    <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:4px">Amount deposited ($)</div>
+    <input id="deposit-amount" type="number" min="0" step="50" placeholder="e.g. 200" onkeydown="depositKey(event)"
+      style="width:100%;border:2px solid var(--good);background:var(--good-pale);color:var(--good);padding:12px 14px;border-radius:12px;font-family:'Syne',sans-serif;font-size:22px;font-weight:800;text-align:center;margin-bottom:16px;outline:none">
+    <div style="display:flex;gap:8px">
+      <button onclick="closeDeposit()" style="flex:1;padding:10px;border-radius:11px;border:1.5px solid var(--border);background:var(--bg);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer">Cancel</button>
+      <button onclick="saveDeposit()" style="flex:2;padding:10px;border-radius:11px;border:none;background:var(--good);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:#fff;cursor:pointer">Save deposit</button>
     </div>
   </div>
 </div>
