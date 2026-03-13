@@ -45,8 +45,15 @@ let lastComputedAllocations={}; // id→amount, updated by recalcPlanner       /
 let plannerCyclePlans={};       // key: cycleKey, value: {payslip, allocations:{id:amount}}
 
 // ── AUTH ───────────────────────────────────────────────────────────────────
+const ALLOWED_UID='REPLACE_WITH_YOUR_UID'; // Firebase console → Authentication → Users
+
 onAuthStateChanged(auth,async user=>{
   if(user){
+    if(user.uid!==ALLOWED_UID){
+      await signOut(auth);
+      document.getElementById('auth-err').textContent='This app is private.';
+      return;
+    }
     currentUser=user;
     showApp();
     await loadSettings();
