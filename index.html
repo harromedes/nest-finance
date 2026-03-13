@@ -40,7 +40,8 @@ let upActiveWeek=0;
 let upSelectedDay=null;
 let manualTransactions=[];
 let recurringTransactions=[];   // confirmed/denied recurrings from Firestore
-let plannerCycleOffset=0;       // 0=current, 1=next, 2=+2, etc. (planner only, future-only)
+let plannerCycleOffset=0;
+let lastComputedAllocations={}; // id→amount, updated by recalcPlanner       // 0=current, 1=next, 2=+2, etc. (planner only, future-only)
 let plannerCyclePlans={};       // key: cycleKey, value: {payslip, allocations:{id:amount}}
 
 // ── AUTH ───────────────────────────────────────────────────────────────────
@@ -1170,18 +1171,6 @@ function renderCyclePlanner(){
       <div id="planner-alloc-rows"></div>
     </div>
 
-    <!-- SAVINGS GOALS (compact link) -->
-    <div class="card">
-      <div class="card-head">
-        <span class="card-title">Savings goals</span>
-        <span class="card-action" onclick="navigateTo('savings')">Manage →</span>
-      </div>
-      ${savingsGoals.length
-        ? `<div id="planner-goals-list"></div>`
-        : `<div style="font-size:11px;color:var(--muted)">No goals yet — <span style="color:var(--accent);cursor:pointer" onclick="navigateTo('savings')">add one on the Savings page</span></div>`
-      }
-    </div>
-
     <!-- SUMMARY -->
     <div class="card" id="planner-summary-card" style="display:none">
       <div class="card-head">
@@ -1201,7 +1190,6 @@ function renderCyclePlanner(){
     </div>`:''}
   `;
 
-  renderSavingsGoals();
   recalcPlanner();
   if(isFinalized) renderTransfersCard();
 }
@@ -1215,9 +1203,13 @@ window.savePlannerCycle=async function(){
   const cycle=getPlannerCycle();
   const key=cycleKey(cycle);
   const payslip=parseFloat(document.getElementById('planner-payslip')?.value)||5000;
-  const inputs=document.querySelectorAll('[id$="-input"][id^="alloc-"]');
-  const allocations={};
-  inputs.forEach(i=>allocations[i.id.replace('-input','')]=parseFloat(i.value)||0);
+  // Start from last computed allocations (always populated by recalcPlanner)
+  const allocations={...lastComputedAllocations};
+  // Override with any live DOM input changes the user may have made
+  document.querySelectorAll('[id$="-input"][id^="alloc-"]').forEach(i=>{
+    const id=i.id.replace('-input','');
+    allocations[id]=parseFloat(i.value)||0;
+  });
   // Preserve finalized + sent state — only update payslip + allocations
   plannerCyclePlans[key]={
     ...(plannerCyclePlans[key]||{}),
@@ -1367,6 +1359,12 @@ function renderSavingsGoalsList(){
           <div>
             <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--text)">${g.name}</div>
             ${dateStr?`<div style="font-size:10px;color:var(--muted);margin-top:1px">Target: ${dateStr}</div>`:''}
+            ${(()=>{
+              if(!g.linkedUpAccountId)return'';
+              const acct=upData.accounts.find(a=>a.id===g.linkedUpAccountId);
+              const name=acct?acct.attributes.displayName:'Up account';
+              return`<div style="font-size:10px;color:var(--up);font-weight:600;margin-top:3px;display:flex;align-items:center;gap:4px"><span>🟡</span>${name} — auto-sync</div>`;
+            })()}
           </div>
         </div>
         <div style="text-align:right;flex-shrink:0">
@@ -1383,7 +1381,7 @@ function renderSavingsGoalsList(){
           ${perCycleStr?`<span style="font-size:10px;color:var(--accent);font-weight:600;margin-left:8px;background:var(--accent-pale);padding:2px 7px;border-radius:8px">${perCycleStr}</span>`:''}
         </div>
         <div style="display:flex;gap:6px">
-          <button onclick="openDepositGoal(${i})" style="background:var(--good-pale);color:var(--good);border:none;padding:6px 14px;border-radius:9px;font-family:'Syne',sans-serif;font-size:11px;font-weight:700;cursor:pointer">+ Deposit</button>
+          ${!g.linkedUpAccountId?`<button onclick="openDepositGoal(${i})" style="background:var(--good-pale);color:var(--good);border:none;padding:6px 14px;border-radius:9px;font-family:'Syne',sans-serif;font-size:11px;font-weight:700;cursor:pointer">+ Deposit</button>`:''}
           <button onclick="deleteGoal(${i})" style="background:none;border:none;font-size:11px;color:var(--muted);cursor:pointer;padding:6px 4px">remove</button>
         </div>
       </div>
@@ -1411,8 +1409,6 @@ window.saveDeposit=async function(){
   closeDeposit();
   if(currentPage==='savings')renderSavingsPage();
   if(currentPage==='overview')renderOverview();
-  // Also refresh goals in planner if visible
-  renderSavingsGoals();
 };
 window.depositKey=function(e){if(e.key==='Enter')saveDeposit();};
 
@@ -1535,6 +1531,9 @@ window.recalcPlanner=function(){
     </div>
   `).join('');
   updateUnallocated(payslip);
+  // Capture in memory for savePlannerCycle
+  lastComputedAllocations={};
+  allocations.forEach(a=>{lastComputedAllocations[a.id]=a.suggested;});
   // Show summary
   document.getElementById('planner-summary-card').style.display='block';
   updatePlannerSummary(payslip,allocations);
@@ -1791,18 +1790,27 @@ window.toggleTransferSent=async function(allocId){
 };
 
 // Goals management
-window.openAddGoal=function(){document.getElementById('add-goal-overlay').style.display='flex';};
+window.openAddGoal=function(){
+  // Populate Up saver accounts
+  const sel=document.getElementById('goal-up-account');
+  if(sel){
+    const savers=upData.accounts.filter(a=>a.attributes.accountType==='SAVER');
+    sel.innerHTML='<option value="">— none (manual deposits only) —</option>'+
+      savers.map(a=>`<option value="${a.id}">${a.attributes.displayName}</option>`).join('');
+  }
+  document.getElementById('add-goal-overlay').style.display='flex';
+};
 window.closeAddGoal=function(){document.getElementById('add-goal-overlay').style.display='none';};
 window.saveGoal=async function(){
   const name=document.getElementById('goal-name').value.trim();
   const target=parseFloat(document.getElementById('goal-target').value);
   const emoji=document.getElementById('goal-emoji').value.trim()||'🎯';
   const targetDate=document.getElementById('goal-date').value||null;
+  const linkedUpAccountId=document.getElementById('goal-up-account')?.value||null;
   if(!name||isNaN(target)||target<=0){alert('Please enter a name and target amount.');return;}
-  savingsGoals.push({name,target,saved:0,emoji,targetDate});
+  savingsGoals.push({name,target,saved:0,emoji,targetDate,linkedUpAccountId:linkedUpAccountId||null});
   await saveSettings();
   closeAddGoal();
-  renderSavingsGoals();
   recalcPlanner();
   if(currentPage==='savings')renderSavingsPage();
   if(currentPage==='overview')renderOverview();
@@ -1810,7 +1818,6 @@ window.saveGoal=async function(){
 window.deleteGoal=async function(idx){
   savingsGoals.splice(idx,1);
   await saveSettings();
-  renderSavingsGoals();
   recalcPlanner();
   if(currentPage==='savings')renderSavingsPage();
   if(currentPage==='overview')renderOverview();
@@ -1818,7 +1825,6 @@ window.deleteGoal=async function(idx){
 window.dismissGoal=async function(idx){
   savingsGoals.splice(idx,1);
   await saveSettings();
-  renderSavingsGoals();
   recalcPlanner();
   if(currentPage==='savings')renderSavingsPage();
   if(currentPage==='overview')renderOverview();
@@ -1843,6 +1849,7 @@ async function loadUpData(){
     showAlert('up-alert-load',false);
     document.getElementById('up-pip').classList.add('show');
     setUpTokenStatus('ok');
+    await syncLinkedGoalDeposits();
     renderUpDashboard();
   }catch(err){
     showAlert('up-alert-load',false);showUpConnect();
@@ -1850,6 +1857,30 @@ async function loadUpData(){
     showAlertMsg('up-alert-err','Could not connect: '+err.message);
   }
 }
+async function syncLinkedGoalDeposits(){
+  // For each goal with a linked Up saver account, sum all inbound transfers
+  // (positive amount) to that account from Up transactions and set goal.saved.
+  // We overwrite goal.saved entirely so it stays in sync with actual Up balance.
+  const linkedGoals=savingsGoals.filter(g=>g.linkedUpAccountId);
+  if(!linkedGoals.length)return;
+  let changed=false;
+  linkedGoals.forEach(g=>{
+    // Sum all positive transactions for this account
+    const credits=upData.transactions.filter(t=>{
+      const acctId=t.relationships?.account?.data?.id;
+      const amt=parseFloat(t.attributes.amount.value);
+      return acctId===g.linkedUpAccountId&&amt>0;
+    });
+    const total=credits.reduce((s,t)=>s+parseFloat(t.attributes.amount.value),0);
+    // Also grab live balance directly from accounts data if available
+    const acct=upData.accounts.find(a=>a.id===g.linkedUpAccountId);
+    const liveBal=acct?parseFloat(acct.attributes.balance.value):null;
+    const newSaved=liveBal!==null?liveBal:total;
+    if(Math.abs((g.saved||0)-newSaved)>0.01){g.saved=Math.round(newSaved*100)/100;changed=true;}
+  });
+  if(changed)await saveSettings();
+}
+
 async function upFetch(url){const r=await fetch(url,{headers:{Authorization:'Bearer '+upToken}});if(!r.ok)throw new Error('Up API '+r.status+' — check token');return await r.json()}
 
 // ── UP CYCLE HELPERS ───────────────────────────────────────────────────────
@@ -2970,6 +3001,13 @@ body.dark .mobile-topbar{border-bottom-color:var(--border)}
       <div><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:3px">Target amount ($)</div><input id="goal-target" type="number" min="0" step="50" placeholder="e.g. 3000" style="width:100%;border:1.5px solid var(--border);background:var(--bg);color:var(--text);padding:9px 12px;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none"></div>
       <div><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:3px">Target date (optional)</div><input id="goal-date" type="month" style="width:100%;border:1.5px solid var(--border);background:var(--bg);color:var(--text);padding:9px 12px;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:12px;outline:none"></div>
       <div><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:3px">Emoji (optional)</div><input id="goal-emoji" type="text" placeholder="🎯" maxlength="2" style="width:80px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);padding:9px 12px;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:20px;text-align:center;outline:none"></div>
+      <div>
+        <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:3px">Link Up saver account <span style="font-weight:400;color:var(--muted)">(optional)</span></div>
+        <select id="goal-up-account" style="width:100%;border:1.5px solid var(--border);background:var(--bg);color:var(--text);padding:9px 12px;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:12px;outline:none;cursor:pointer">
+          <option value="">— none (manual deposits only) —</option>
+        </select>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px;line-height:1.4">When linked, deposits to this Up account are automatically recorded against this goal.</div>
+      </div>
     </div>
     <div style="display:flex;gap:8px;margin-top:16px">
       <button onclick="closeAddGoal()" style="flex:1;padding:10px;border-radius:11px;border:1.5px solid var(--border);background:var(--bg);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer">Cancel</button>
