@@ -39,6 +39,7 @@ let upViewCycleOffset=0;
 let upActiveWeek=0;
 let upSelectedDay=null;
 let manualTransactions=[];
+let recurringTransactions=[];   // confirmed/denied recurrings from Firestore
 let plannerCycleOffset=0;       // 0=current, 1=next, 2=+2, etc. (planner only, future-only)
 let plannerCyclePlans={};       // key: cycleKey, value: {payslip, allocations:{id:amount}}
 
@@ -49,6 +50,7 @@ onAuthStateChanged(auth,async user=>{
     showApp();
     await loadSettings();
     await loadManualTransactions();
+    await loadRecurringTransactions();
     await loadAllStatements();
     if(upToken) await loadUpData(); else showUpConnect();
     navigateTo('overview');
@@ -81,6 +83,7 @@ function stmtCol(bank){return collection(db,'users',uid(),'statements_'+bank)}
 function stmtDoc(bank,period){return doc(db,'users',uid(),'statements_'+bank,periodToId(period))}
 function settingsDoc(){return doc(db,'users',uid(),'settings','main')}
 function manualTxCol(){return collection(db,'users',uid(),'manual_transactions')}
+function recurringCol(){return collection(db,'users',uid(),'recurring_transactions')}
 function periodToId(p){return p.replace(/[^a-zA-Z0-9-]/g,'-').toLowerCase()}
 
 async function loadSettings(){
@@ -119,6 +122,50 @@ async function saveManualTransaction(tx){
 async function deleteManualTransaction(id){
   await deleteDoc(doc(db,'users',uid(),'manual_transactions',id));
   manualTransactions=manualTransactions.filter(t=>t.id!==id);
+}
+
+// ── RECURRING TRANSACTIONS ────────────────────────────────────────────────
+async function loadRecurringTransactions(){
+  try{
+    const snap=await getDocs(recurringCol());
+    recurringTransactions=snap.docs.map(d=>({id:d.id,...d.data()}));
+  }catch(err){console.warn('loadRecurring:',err)}
+}
+async function saveRecurring(entry){
+  // entry: {merchant, amount, category, status: 'confirmed'|'denied', source}
+  const key=recurringKey(entry.merchant,entry.amount);
+  await setDoc(doc(db,'users',uid(),'recurring_transactions',key),entry);
+  const idx=recurringTransactions.findIndex(r=>r.id===key);
+  if(idx>=0)recurringTransactions[idx]={id:key,...entry};
+  else recurringTransactions.push({id:key,...entry});
+}
+async function deleteRecurring(id){
+  await deleteDoc(doc(db,'users',uid(),'recurring_transactions',id));
+  recurringTransactions=recurringTransactions.filter(r=>r.id!==id);
+}
+function recurringKey(merchant,amount){
+  return(merchant+'-'+amount).toLowerCase().replace(/[^a-z0-9]/g,'-').slice(0,60);
+}
+
+// Detect recurring candidates from ANZ statements (same merchant+amount in last 3 periods)
+function detectRecurringCandidates(){
+  const stmts=cc.anz.statements.slice(-3);
+  if(stmts.length<3)return[];
+  const counts={};
+  stmts.forEach(stmt=>{
+    // Dedupe within a single statement
+    const seen=new Set();
+    stmt.transactions.forEach(t=>{
+      const k=recurringKey(t.merchant,t.amount);
+      if(!seen.has(k)){seen.add(k);counts[k]=(counts[k]||{count:0,merchant:t.merchant,amount:t.amount,category:t.category});counts[k].count++;}
+    });
+  });
+  // Only those appearing in all 3
+  return Object.entries(counts)
+    .filter(([,v])=>v.count>=3)
+    .map(([key,v])=>({key,merchant:v.merchant,amount:v.amount,category:v.category}))
+    // Exclude already confirmed or denied
+    .filter(c=>!recurringTransactions.find(r=>r.id===c.key));
 }
 
 async function loadAllStatements(){
@@ -614,6 +661,24 @@ function renderOverview(){
       </div>
       ${cycleBudget?`<div style="height:6px;background:var(--bg);border-radius:4px;overflow:hidden"><div style="height:100%;border-radius:4px;background:var(--up);width:${Math.min(100,(cycleSpent/cycleBudget*100)).toFixed(1)}%;transition:width .5s"></div></div>`:''}
     </div>`:''}
+
+    <!-- RECURRING REVIEW CARD -->
+    ${(()=>{
+      const candidates=detectRecurringCandidates();
+      if(!candidates.length)return'';
+      const confirmed=recurringTransactions.filter(r=>r.status==='confirmed');
+      return`<div class="card">
+        <div class="card-head">
+          <span class="card-title">Recurring transactions</span>
+          <span class="card-badge" style="background:var(--warn-pale);color:var(--warn);cursor:pointer" onclick="openRecurringReview()">${candidates.length} to review</span>
+        </div>
+        ${confirmed.length?`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${confirmed.length} confirmed recurring${confirmed.length!==1?'s':''} · <span style="color:var(--accent);cursor:pointer" onclick="navigateTo('transactions');setTimeout(()=>switchTxTab('recurring'),100)">view all →</span></div>`:''}
+        <div style="font-size:11px;color:var(--muted);line-height:1.5">
+          ${candidates.slice(0,3).map(c=>`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--bg);border-radius:8px;padding:3px 8px;margin:2px 3px 2px 0;font-size:10px;font-weight:500">${catEmoji(c.category)} ${c.merchant} · ${fmt(c.amount)}</span>`).join('')}${candidates.length>3?`<span style="font-size:10px;color:var(--muted)"> +${candidates.length-3} more</span>`:''}
+        </div>
+        <button onclick="openRecurringReview()" style="width:100%;margin-top:10px;background:var(--accent-pale);color:var(--accent);border:none;padding:9px;border-radius:10px;font-family:'Syne',sans-serif;font-size:11px;font-weight:700;cursor:pointer">Review recurring transactions →</button>
+      </div>`;
+    })()}
   `;
 }
 
@@ -645,6 +710,29 @@ function getAllTransactions(){
 
 function renderTransactionsPage(){
   const el=document.getElementById('transactions-content');if(!el)return;
+  // Always rebuild tab bar (resets to All tab on page navigate)
+  el.innerHTML=`<div id="tx-tab-bar" style="display:flex;gap:4px;margin-bottom:12px">
+    <button class="tx-tab active" id="tx-tab-all" onclick="switchTxTab('all')">All</button>
+    <button class="tx-tab" id="tx-tab-recurring" onclick="switchTxTab('recurring')">🔁 Recurring${recurringTransactions.filter(r=>r.status==='confirmed').length?`<span style="margin-left:4px;background:var(--accent);color:#fff;border-radius:8px;padding:1px 5px;font-size:9px">${recurringTransactions.filter(r=>r.status==='confirmed').length}</span>`:''}
+    </button>
+  </div>
+  <div id="tx-tab-all-content"></div>
+  <div id="tx-tab-recurring-content" style="display:none"></div>`;
+  renderTxAll();
+  renderTxRecurring();
+}
+
+window.switchTxTab=function(tab){
+  document.querySelectorAll('.tx-tab').forEach(b=>b.classList.toggle('active',b.id==='tx-tab-'+tab));
+  document.getElementById('tx-tab-all-content').style.display=tab==='all'?'':'none';
+  document.getElementById('tx-tab-recurring-content').style.display=tab==='recurring'?'':'none';
+  // Update the filter bar visibility
+  const head=document.querySelector('.tx-page-head');
+  if(head)head.style.display=tab==='all'?'':'none';
+};
+
+function renderTxAll(){
+  window.renderTxAll=renderTxAll;
   const query=(document.getElementById('tx-page-search')?.value||'').toLowerCase();
   const sourceFilter=document.getElementById('tx-source-filter')?.value||'all';
   let txs=getAllTransactions();
@@ -660,20 +748,112 @@ function renderTransactionsPage(){
     cycleGroups[key].txs.push(t);
   });
   const sorted=Object.entries(cycleGroups).sort((a,b)=>new Date(b[0])-new Date(a[0]));
-  const txListEl=document.getElementById('tx-page-list');
-  if(!txListEl)return;
-  txListEl.innerHTML=sorted.length?sorted.map(([key,{cycle,txs:ctxs}])=>{
+  const el=document.getElementById('tx-tab-all-content')||document.getElementById('tx-page-list');
+  if(!el)return;
+  // Build set of confirmed recurring keys for badge display
+  const confirmedKeys=new Set(recurringTransactions.filter(r=>r.status==='confirmed').map(r=>r.id));
+  el.innerHTML=sorted.length?sorted.map(([key,{cycle,txs:ctxs}])=>{
     const total=ctxs.reduce((s,t)=>s+(t.type==='credit'?-t.amount:t.amount),0);
     const label=MN[cycle.start.getMonth()]+' '+cycle.start.getDate()+' – '+MN[cycle.end.getMonth()]+' '+cycle.end.getDate()+' '+cycle.end.getFullYear();
     const rows=ctxs.map(t=>{
       const srcBadge=t.source==='anz'?'<span class="src-badge anz">ANZ</span>':t.source==='wbc'?'<span class="src-badge wbc">WBC</span>':t.source==='up'?`<span class="src-badge up">${t.acct||'Up'}</span>`:'<span class="src-badge manual">Manual</span>';
       const del=t.source==='manual'?`<button class="tx-del-btn" onclick="deleteMtx('${t.id}')">×</button>`:'';
       const edit=t.source==='manual'?`<button class="tx-edit-btn" onclick="openEditTx('${t.id}')">✎</button>`:'';
-      return`<div class="tx-row"><div class="tx-icon">${t.source==='up'?upTxEmoji(t.merchant):catEmoji(t.category)}</div><div style="flex:1;min-width:0"><div class="tx-name">${t.merchant}</div><div class="tx-meta">${srcBadge}<span class="tx-tag">${t.category}</span>${t.note?`<span class="tx-tag" style="background:var(--warn-pale);color:var(--warn)">${t.note}</span>`:''}</div></div><div class="tx-amt ${t.type==='credit'?'credit':''}">${t.type==='credit'?'+':''}${fmt(t.amount)}</div>${edit}${del}</div>`;
+      const rkey=recurringKey(t.merchant,t.amount);
+      const isRecurring=confirmedKeys.has(rkey);
+      const recurringBtn=t.source==='anz'||t.source==='manual'
+        ?isRecurring
+          ?`<button class="tx-recur-btn active" title="Confirmed recurring" onclick="unmarkRecurring('${rkey}')">🔁</button>`
+          :`<button class="tx-recur-btn" title="Mark as recurring" onclick="markRecurring('${escAttr(t.merchant)}',${t.amount},'${escAttr(t.category)}','${t.source}')">🔁</button>`
+        :'';
+      return`<div class="tx-row"><div class="tx-icon">${t.source==='up'?upTxEmoji(t.merchant):catEmoji(t.category)}</div><div style="flex:1;min-width:0"><div class="tx-name">${t.merchant}${isRecurring?'<span class="recur-badge">recurring</span>':''}</div><div class="tx-meta">${srcBadge}<span class="tx-tag">${t.category}</span>${t.note?`<span class="tx-tag" style="background:var(--warn-pale);color:var(--warn)">${t.note}</span>`:''}</div></div><div class="tx-amt ${t.type==='credit'?'credit':''}">${t.type==='credit'?'+':''}${fmt(t.amount)}</div>${recurringBtn}${edit}${del}</div>`;
     }).join('');
     return`<div class="tx-cycle-group"><div class="tx-cycle-header"><span class="tx-cycle-lbl">${label}</span><span class="tx-cycle-total">${fmt(total)}</span></div>${rows}</div>`;
   }).join(''):'<div style="font-size:12px;color:var(--muted);padding:20px 0;text-align:center">No transactions found</div>';
 }
+
+function renderTxRecurring(){
+  const el=document.getElementById('tx-tab-recurring-content');if(!el)return;
+  const confirmed=recurringTransactions.filter(r=>r.status==='confirmed');
+  const totalMonthly=confirmed.reduce((s,r)=>s+r.amount,0);
+  if(!confirmed.length){
+    el.innerHTML=`<div style="text-align:center;padding:32px 0">
+      <div style="font-size:28px;margin-bottom:8px">🔁</div>
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">No recurring transactions yet</div>
+      <div style="font-size:11px;color:var(--muted)">Mark transactions as recurring from the All tab, or upload more ANZ statements to auto-detect them</div>
+    </div>`;
+    return;
+  }
+  el.innerHTML=`<div style="background:var(--accent-pale);border-radius:14px;padding:14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
+    <div>
+      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:3px">Monthly total</div>
+      <div style="font-family:'Syne',sans-serif;font-size:26px;font-weight:800;color:var(--accent)">${fmt(totalMonthly)}</div>
+      <div style="font-size:10px;color:var(--muted)">${confirmed.length} recurring item${confirmed.length!==1?'s':''}</div>
+    </div>
+    <div style="text-align:right;font-size:11px;color:var(--accent)">${fmt(totalMonthly*12)}<br><span style="color:var(--muted)">per year</span></div>
+  </div>`+confirmed.map(r=>`
+    <div class="tx-row">
+      <div class="tx-icon">${catEmoji(r.category)}</div>
+      <div style="flex:1;min-width:0">
+        <div class="tx-name">${r.merchant}<span class="recur-badge">recurring</span></div>
+        <div class="tx-meta"><span class="tx-tag">${r.category}</span><span class="src-badge ${r.source||'anz'}">${(r.source||'anz').toUpperCase()}</span></div>
+      </div>
+      <div class="tx-amt">${fmt(r.amount)}</div>
+      <button class="tx-del-btn" onclick="unmarkRecurring('${r.id}')" title="Remove recurring">×</button>
+    </div>`).join('');
+}
+
+// ── RECURRING ACTIONS ──────────────────────────────────────────────────────
+window.markRecurring=async function(merchant,amount,category,source){
+  await saveRecurring({merchant,amount,category,source,status:'confirmed',confirmedAt:new Date().toISOString()});
+  renderTxAll();
+  renderTxRecurring();
+  if(currentPage==='overview')renderOverview();
+};
+window.unmarkRecurring=async function(id){
+  await deleteRecurring(id);
+  renderTxAll();
+  renderTxRecurring();
+  if(currentPage==='overview')renderOverview();
+};
+
+// Review modal — confirm/deny detected candidates
+window.openRecurringReview=function(){
+  const candidates=detectRecurringCandidates();
+  if(!candidates.length)return;
+  const el=document.getElementById('recurring-review-overlay');
+  document.getElementById('recurring-review-list').innerHTML=candidates.map((c,i)=>`
+    <div class="recur-review-row" id="recur-review-${i}">
+      <div class="tx-icon">${catEmoji(c.category)}</div>
+      <div style="flex:1;min-width:0">
+        <div class="tx-name">${c.merchant}</div>
+        <div class="tx-meta"><span class="tx-tag">${c.category}</span><span style="font-size:10px;color:var(--muted)">appears in last 3 statements</span></div>
+      </div>
+      <div class="tx-amt" style="margin-right:8px">${fmt(c.amount)}</div>
+      <div style="display:flex;gap:5px">
+        <button class="recur-confirm-btn" onclick="reviewRecurring(${i},'confirm','${escAttr(c.merchant)}',${c.amount},'${escAttr(c.category)}','anz')">✓</button>
+        <button class="recur-deny-btn" onclick="reviewRecurring(${i},'deny','${escAttr(c.merchant)}',${c.amount},'${escAttr(c.category)}','anz')">✗</button>
+      </div>
+    </div>`).join('');
+  document.getElementById('recurring-review-remaining').textContent=candidates.length+' to review';
+  el.style.display='flex';
+};
+window.closeRecurringReview=function(){
+  document.getElementById('recurring-review-overlay').style.display='none';
+  if(currentPage==='overview')renderOverview();
+};
+window.reviewRecurring=async function(idx,action,merchant,amount,category,source){
+  const row=document.getElementById('recur-review-'+idx);
+  if(row){row.style.opacity='0.4';row.style.pointerEvents='none';}
+  await saveRecurring({merchant,amount,category,source,status:action==='confirm'?'confirmed':'denied',confirmedAt:new Date().toISOString()});
+  // Update remaining count
+  const remaining=document.querySelectorAll('.recur-review-row:not([style*="opacity"])').length;
+  document.getElementById('recurring-review-remaining').textContent=remaining+' to review';
+  if(remaining===0)setTimeout(closeRecurringReview,400);
+};
+
+function escAttr(s){return(s||'').replace(/'/g,'\\x27').replace(/"/g,'&quot;');}
+
 
 window.deleteMtx=async function(id){
   await deleteManualTransaction(id);
@@ -1825,6 +2005,20 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .tx-del-btn:hover{color:var(--bad)}
 .tx-edit-btn{background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0}
 .tx-edit-btn:hover{color:var(--accent)}
+/* Recurring */
+.tx-tab{flex:1;padding:7px 10px;font-size:11px;font-weight:700;font-family:'Syne',sans-serif;background:var(--bg);border:none;border-radius:10px;color:var(--muted);cursor:pointer;transition:all .15s}
+.tx-tab.active{background:var(--surface);color:var(--text);box-shadow:0 1px 6px rgba(0,0,0,0.07)}
+.tx-tab:hover:not(.active){color:var(--text)}
+.tx-recur-btn{background:none;border:none;font-size:13px;cursor:pointer;padding:0 3px;line-height:1;flex-shrink:0;opacity:.3;transition:opacity .15s}
+.tx-recur-btn:hover{opacity:.8}
+.tx-recur-btn.active{opacity:1}
+.recur-badge{display:inline-block;margin-left:5px;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:700;background:var(--accent-pale);color:var(--accent);vertical-align:middle}
+.recur-review-row{display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--bg);transition:opacity .3s}
+.recur-review-row:last-child{border-bottom:none}
+.recur-confirm-btn{background:var(--good-pale);color:var(--good);border:none;border-radius:8px;width:30px;height:30px;font-size:14px;font-weight:700;cursor:pointer;transition:all .15s;flex-shrink:0}
+.recur-confirm-btn:hover{background:var(--good);color:#fff}
+.recur-deny-btn{background:var(--bad-pale);color:var(--bad);border:none;border-radius:8px;width:30px;height:30px;font-size:14px;font-weight:700;cursor:pointer;transition:all .15s;flex-shrink:0}
+.recur-deny-btn:hover{background:var(--bad);color:#fff}
 
 /* ── DEBT PLANNER PAGE ── */
 .debt-hero{background:linear-gradient(140deg,#8A1A1A 0%,#C0392B 100%);border-radius:22px;padding:22px;margin-bottom:10px;position:relative;overflow:hidden}
@@ -2337,8 +2531,8 @@ body.dark .mobile-topbar{border-bottom-color:var(--border)}
             <button class="btn-add-tx" onclick="openAddTx()">+ Add manual</button>
           </div>
           <div class="tx-page-head">
-            <input class="tx-page-search" id="tx-page-search" placeholder="Search merchant or category…" oninput="renderTransactionsPage()">
-            <select class="tx-source-filter" id="tx-source-filter" onchange="renderTransactionsPage()">
+            <input class="tx-page-search" id="tx-page-search" placeholder="Search merchant or category…" oninput="renderTxAll()">
+            <select class="tx-source-filter" id="tx-source-filter" onchange="renderTxAll()">
               <option value="all">All sources</option>
               <option value="up">Up Bank</option>
               <option value="anz">ANZ</option>
@@ -2470,6 +2664,26 @@ body.dark .mobile-topbar{border-bottom-color:var(--border)}
     <div style="display:flex;gap:8px;margin-top:16px">
       <button onclick="closeAddGoal()" style="flex:1;padding:10px;border-radius:11px;border:1.5px solid var(--border);background:var(--bg);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer">Cancel</button>
       <button onclick="saveGoal()" style="flex:2;padding:10px;border-radius:11px;border:none;background:var(--good);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:#fff;cursor:pointer">Save goal</button>
+    </div>
+  </div>
+</div>
+
+<!-- RECURRING REVIEW OVERLAY -->
+<div id="recurring-review-overlay" style="display:none;position:fixed;inset:0;background:rgba(26,24,48,0.45);z-index:200;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)closeRecurringReview()">
+  <div style="background:var(--surface);border-radius:20px;padding:24px;width:100%;max-width:380px;box-shadow:0 8px 32px rgba(99,85,216,0.18);max-height:88vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:var(--text)">Recurring check</div>
+      <button onclick="closeRecurringReview()" style="background:none;border:none;font-size:20px;color:var(--muted);cursor:pointer;line-height:1">×</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:16px;line-height:1.5">These merchants appeared at the same amount across your last 3 ANZ statements. Confirm if they're recurring charges.</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">Candidates</div>
+      <div id="recurring-review-remaining" style="font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-pale);padding:2px 9px;border-radius:10px"></div>
+    </div>
+    <div id="recurring-review-list"></div>
+    <div style="display:flex;gap:6px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+      <div style="font-size:10px;color:var(--muted);flex:1;line-height:1.4">✓ Confirm to track as recurring · ✗ Deny to stop seeing this suggestion</div>
+      <button onclick="closeRecurringReview()" style="padding:8px 16px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg);font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap">Done</button>
     </div>
   </div>
 </div>
