@@ -31,6 +31,7 @@ let upToken='';
 let upCycleBudgets={};
 let cardSettings={anz:{rate:20.99,promoRate:null,promoExpiry:null},wbc:{rate:20.99,promoRate:null,promoExpiry:null}};
 let savingsGoals=[];
+let rentAmount=0; // stored in Firestore settings, editable in planner
 let currentPage='overview';
 const cc={anz:{statements:[],activeIdx:0},wbc:{statements:[],activeIdx:0}};
 let upData={accounts:[],transactions:[]};
@@ -92,6 +93,7 @@ async function loadSettings(){
       if(d.cardSettings)cardSettings={...cardSettings,...d.cardSettings};
       if(d.savingsGoals)savingsGoals=d.savingsGoals;
       if(d.plannerCyclePlans)plannerCyclePlans=d.plannerCyclePlans;
+      if(d.rentAmount)rentAmount=d.rentAmount;
       if(scriptURL)document.getElementById('script-url').value=scriptURL;
       if(scriptSecret)document.getElementById('script-secret').value=scriptSecret;
       if(upToken)document.getElementById('up-token').value=upToken;
@@ -100,7 +102,7 @@ async function loadSettings(){
   }catch(err){console.warn('loadSettings:',err)}
 }
 async function saveSettings(){
-  await setDoc(settingsDoc(),{scriptURL,scriptSecret,upToken,upCycleBudgets,cardSettings,savingsGoals,plannerCyclePlans},{merge:true});
+  await setDoc(settingsDoc(),{scriptURL,scriptSecret,upToken,upCycleBudgets,cardSettings,savingsGoals,plannerCyclePlans,rentAmount},{merge:true});
 }
 async function loadManualTransactions(){
   try{
@@ -941,9 +943,21 @@ window.recalcPlanner=function(){
   const goalCount=savingsGoals.length||1;
   const perGoal=savingsGoals.length?Math.round(savingsBudget/goalCount/10)*10:savingsBudget;
 
+  // Subscriptions: avg of last 3 ANZ cycles
+  const anzStmts=cc.anz.statements;
+  const subSlice=anzStmts.slice(-3);
+  const subAmts=subSlice.map(s=>{
+    const cats={};s.transactions.forEach(t=>{cats[t.category]=(cats[t.category]||0)+t.amount;});
+    return cats['Subscriptions']||0;
+  }).filter(v=>v>0);
+  const subSuggested=subAmts.length?Math.round(subAmts.reduce((a,b)=>a+b,0)/subAmts.length/5)*5:0;
+  const subSource=subAmts.length?`avg of last ${subAmts.length} ANZ cycle${subAmts.length!==1?'s':''}`:null;
+
   const allocations=[
+    {id:'alloc-rent',label:'Rent',icon:'🏠',color:'#7C6BC4',suggested:rentAmount||0,min:0,max:payslip,hint:'Fixed — edit to update for all future cycles',isRent:true},
     {id:'alloc-anz',label:'ANZ debt payment',icon:'💳',color:'#6355D8',suggested:anzDebt,min:0,max:anzBal},
     {id:'alloc-wbc',label:'Westpac debt payment',icon:'💳',color:'#D84343',suggested:wbcDebt,min:0,max:wbcBal},
+    {id:'alloc-subs',label:'Subscriptions',icon:'📱',color:'#9B8FEE',suggested:subSuggested,min:0,max:payslip,hint:subSource?`prefilled: ${subSource}`:null},
     {id:'alloc-up',label:'Up Bank spending',icon:'🛒',color:'var(--up)',suggested:spendBudget,min:0,max:payslip},
     ...savingsGoals.map((g,i)=>({id:'alloc-goal-'+i,label:g.name+' savings',icon:g.emoji||'🎯',color:'var(--good)',suggested:perGoal,min:0,max:g.target-(g.saved||0)})),
     {id:'alloc-invest',label:'Investments',icon:'📈',color:'var(--accent)',suggested:investBudget,min:0,max:payslip},
@@ -960,18 +974,20 @@ window.recalcPlanner=function(){
   const rowsEl=document.getElementById('planner-alloc-rows');if(!rowsEl)return;
   rowsEl.innerHTML=allocations.map(a=>`
     <div class="alloc-row" id="${a.id}-row">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${a.hint?'3':'6'}px">
         <div style="display:flex;align-items:center;gap:7px">
           <span style="font-size:14px">${a.icon}</span>
           <span style="font-size:12px;font-weight:600">${a.label}</span>
         </div>
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:9px;color:var(--muted)">$</span>
-          <input type="number" id="${a.id}-input" value="${a.suggested}" min="${a.min}" max="${Math.max(a.max,a.suggested)}" step="50"
+          <input type="number" id="${a.id}-input" value="${a.suggested}" min="${a.min}" max="${Math.max(a.max,a.suggested)}" step="${a.isRent?10:50}"
             style="font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:var(--text);border:none;background:transparent;width:80px;text-align:right;outline:none"
-            oninput="updateAllocBar('${a.id}',${Math.max(a.max,a.suggested)});updateUnallocated(${payslip})">
+            oninput="updateAllocBar('${a.id}',${Math.max(a.max,a.suggested)});updateUnallocated(${payslip})"
+            ${a.isRent?`onblur="persistRentAmount(this.value)"`:''}>
         </div>
       </div>
+      ${a.hint?`<div style="font-size:9px;color:var(--muted);margin-bottom:5px;padding-left:22px">${a.hint}</div>`:''}
       <div style="height:5px;background:var(--bg);border-radius:3px;overflow:hidden">
         <div id="${a.id}-bar" style="height:100%;border-radius:3px;background:${a.color};width:${Math.min(100,(a.suggested/payslip*100)).toFixed(1)}%;transition:width .3s"></div>
       </div>
@@ -996,6 +1012,14 @@ window.updateUnallocated=function(payslip){
   const unalloc=payslip-total;
   const badge=document.getElementById('planner-unallocated-badge');
   if(badge){badge.textContent=(unalloc>=0?fmt(unalloc)+' unallocated':fmt(Math.abs(unalloc))+' over');badge.style.color=unalloc<0?'var(--bad)':unalloc===0?'var(--good)':'var(--muted)';}
+};
+
+// Persist rent amount to Firestore so it carries forward to all future cycles
+window.persistRentAmount=async function(val){
+  const v=parseFloat(val)||0;
+  if(v===rentAmount)return;
+  rentAmount=v;
+  await saveSettings();
 };
 
 function updatePlannerSummary(payslip,allocations){
